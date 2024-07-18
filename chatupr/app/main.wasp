@@ -186,6 +186,11 @@ action updateTask {
   entities: [Task]
 }
 
+action createGame {
+  fn: import { createGame } from "@src/game/actions.js",
+  entities: [Game]
+}
+
 query getGptResponses {
   fn: import { getGptResponses } from "@src/demo-ai-app/operations",
   entities: [User, GptResponse]

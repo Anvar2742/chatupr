@@ -6,6 +6,7 @@ import {
     ClientToServerPayload,
 } from 'wasp/client/webSocket'
 import { generateRoomId } from './utils';
+import { createGame } from 'wasp/client/operations'
 
 export const LobbyPage = () => {
     const [roomOptions, setRoomOptions] = useState<
@@ -48,9 +49,17 @@ export const LobbyPage = () => {
         console.log(roomInfoArr)
         setConnectedClients(roomInfoArr?.clients);
         if (roomInfoArr?.clients) {
-
+            handleGameCreate()
         }
     }, [roomInfoArr]);
+
+    const handleGameCreate = async () => {
+        try {
+            await createGame();
+        } catch (err: any) {
+            window.alert('Error: ' + (err.message || 'Something went wrong'));
+        }
+    };
 
     const clientsList = connectedClients?.map((client) => (
         <li key={client.id}>
