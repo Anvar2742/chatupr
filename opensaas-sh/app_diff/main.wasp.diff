@@ -1,0 +1,95 @@
+--- template/app/main.wasp
++++ opensaas-sh/app/main.wasp
+@@ -3,24 +3,24 @@
+     version: "^0.14.0"
+   },
+ 
+-  title: "My Open SaaS App",
++  title: "Open SaaS",
+ 
+   head: [
+         "<meta property='og:type' content='website' />",
+-        "<meta property='og:title' content='My Open SaaS App' />",
++        "<meta property='og:title' content='Open SaaS' />",
+         "<meta property='og:url' content='https://opensaas.sh' />",
+-        "<meta property='og:description' content='I made a SaaS App. Buy my stuff.' />",
+-        "<meta property='og:image' content='https://opensaas.sh/public-banner.png' />",
+-        "<meta name='twitter:image' content='https://opensaas.sh/public-banner.png' />",
++        "<meta property='og:description' content='Free, open-source SaaS boilerplate starter for React & NodeJS.' />",
++        "<meta property='og:image' content='https://opensaas.sh/banner.png' />",
++
++        "<meta name=\"twitter:title\" content=\"Open SaaS\" />",
++        "<meta name=\"twitter:text:title\" content=\"Open SaaS\" />",
++        "<meta name='twitter:image' content='https://opensaas.sh/banner.png' />",
++        "<meta name=\"twitter:image:alt\" content=\"Open SaaS\" />",
+         "<meta name='twitter:image:width' content='800' />",
+         "<meta name='twitter:image:height' content='400' />",
+         "<meta name='twitter:card' content='summary_large_image' />",
+-        // TODO: You can put your Plausible analytics scripts below (https://docs.opensaas.sh/guides/analytics/):
+-        // NOTE: Plausible does not use Cookies, so you can simply add the scripts here.
+-        // Google, on the other hand, does, so you must instead add the script dynamically
+-        // via the Cookie Consent component after the user clicks the "Accept" cookies button.
+-        "<script defer data-domain='<your-site-id>' src='https://plausible.io/js/script.js'></script>",  // for production
+-        "<script defer data-domain='<your-site-id>' src='https://plausible.io/js/script.local.js'></script>",  // for development
++        "<script defer data-domain='opensaas.sh' src='https://plausible.apps.twoducks.dev/js/script.js'></script>",
++        "<script defer data-domain='opensaas.sh' src='https://plausible.apps.twoducks.dev/js/script.local.js'></script>",
+   ],
+ 
+   // 🔐 Auth out of the box! https://wasp-lang.dev/docs/auth/overview
+@@ -32,7 +32,7 @@
+       email: {
+         fromField: {
+           name: "Open SaaS App",
+-          email: "me@example.com"
++          email: "vince@wasp-lang.dev"
+         },
+         emailVerification: {
+           clientRoute: EmailVerificationRoute,
+@@ -44,21 +44,18 @@
+         },
+         userSignupFields: import { getEmailUserFields } from "@src/auth/userSignupFields",
+       },
+-      // Uncomment to enable Google Auth (check https://wasp-lang.dev/docs/auth/social-auth/google for setup instructions):
+-      // google: { // Guide for setting up Auth via Google
+-      //   userSignupFields: import { getGoogleUserFields } from "@src/auth/userSignupFields",
+-      //   configFn: import { getGoogleAuthConfig } from "@src/auth/userSignupFields",
+-      // },
+-      // Uncomment to enable GitHub Auth (check https://wasp-lang.dev/docs/auth/social-auth/github for setup instructions):
+-      // gitHub: {
+-      //   userSignupFields: import { getGitHubUserFields } from "@src/auth/userSignupFields",
+-      //   configFn: import { getGitHubAuthConfig } from "@src/auth/userSignupFields",
+-      // },
+-      // Uncomment to enable Discord Auth (check https://wasp-lang.dev/docs/auth/social-auth/discord for setup instructions):
+-      // discord: {
+-      //   userSignupFields: import { getDiscordUserFields } from "@src/auth/userSignupFields",
+-      //   configFn: import { getDiscordAuthConfig } from "@src/auth/userSignupFields"
+-      // }
++      google: {
++        userSignupFields: import { getGoogleUserFields } from "@src/auth/userSignupFields",
++        configFn: import { getGoogleAuthConfig } from "@src/auth/userSignupFields",
++      },
++      gitHub: {
++        userSignupFields: import { getGitHubUserFields } from "@src/auth/userSignupFields",
++        configFn: import { getGitHubAuthConfig } from "@src/auth/userSignupFields",
++      },
++      discord: {
++        userSignupFields: import { getDiscordUserFields } from "@src/auth/userSignupFields",
++        configFn: import { getDiscordAuthConfig } from "@src/auth/userSignupFields"
++      }
+     },
+     onAfterSignup: import { onAfterSignup } from "@src/auth/hooks",
+     onAuthFailedRedirectTo: "/login",
+@@ -81,11 +78,11 @@
+     // NOTE: "Dummy" provider is just for local development purposes.
+     //   Make sure to check the server logs for the email confirmation url (it will not be sent to an address)!
+     //   Once you are ready for production, switch to e.g. "SendGrid" or "Mailgun" providers. Check out https://docs.opensaas.sh/guides/email-sending/ .
+-    provider: Dummy,
++    provider: SendGrid,
+     defaultFrom: {
+       name: "Open SaaS App",
+       // When using a real provider, e.g. SendGrid, you must use the same email address that you configured your account to send out emails with!
+-      email: "me@example.com"
++      email: "vince@wasp-lang.dev"
+     },
+   },
+ }

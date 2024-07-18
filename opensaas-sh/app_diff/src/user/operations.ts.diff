@@ -1,0 +1,18 @@
+--- template/app/src/user/operations.ts
++++ opensaas-sh/app/src/user/operations.ts
+@@ -80,6 +80,7 @@
+             mode: 'insensitive',
+           },
+           isAdmin: args.isAdmin,
++          isMockUser: true
+         },
+         {
+           OR: [
+@@ -120,6 +121,7 @@
+             mode: 'insensitive',
+           },
+           isAdmin: args.isAdmin,
++          isMockUser: true
+         },
+         {
+           OR: [
