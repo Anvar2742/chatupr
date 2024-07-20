@@ -127,11 +127,18 @@ page EmailVerificationPage {
 }
 //#endregion
 
-//#region Game routes
+//#region Lobby routes
 
 route LobbyRoute { path: "/lobby", to: LobbyPage }
 page LobbyPage {
-  component: import { LobbyPage } from "@src/game/LobbyPage",
+  component: import { LobbyPage } from "@src/lobby/LobbyPage",
+  authRequired: true,
+}
+
+route JoinLobbyRoute { path: "/join/:joinCode", to: JoinLobbyPage }
+page JoinLobbyPage {
+  component: import { JoinLobbyPage } from "@src/lobby/JoinLobbyPage",
+  authRequired: true,
 }
 
 //#endregion
@@ -186,11 +193,6 @@ action updateTask {
   entities: [Task]
 }
 
-action createGame {
-  fn: import { createGame } from "@src/game/actions.js",
-  entities: [Game]
-}
-
 query getGptResponses {
   fn: import { getGptResponses } from "@src/demo-ai-app/operations",
   entities: [User, GptResponse]
@@ -201,6 +203,21 @@ query getAllTasksByUser {
   entities: [Task]
 }
 //#endregion
+
+action createLobby {
+  fn: import { createLobby } from "@src/lobby/actions",
+  entities: [Lobby]
+}
+
+action joinLobby {
+  fn: import { joinLobby } from "@src/lobby/actions",
+  entities: [Lobby]
+}
+
+query getUserLobby {
+  fn: import { getUserLobby } from "@src/lobby/actions",
+  entities: [Lobby]
+}
 
 //#region Payment
 route PricingPageRoute { path: "/pricing", to: PricingPage }

@@ -13,6 +13,7 @@ CREATE TABLE "User" (
     "sendNewsletter" BOOLEAN NOT NULL DEFAULT false,
     "datePaid" TIMESTAMP(3),
     "credits" INTEGER NOT NULL DEFAULT 3,
+    "gameId" TEXT,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -157,6 +158,9 @@ CREATE UNIQUE INDEX "Session_id_key" ON "Session"("id");
 
 -- CreateIndex
 CREATE INDEX "Session_userId_idx" ON "Session"("userId");
+
+-- AddForeignKey
+ALTER TABLE "User" ADD CONSTRAINT "User_gameId_fkey" FOREIGN KEY ("gameId") REFERENCES "Game"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "GptResponse" ADD CONSTRAINT "GptResponse_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

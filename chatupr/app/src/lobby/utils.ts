@@ -1,5 +1,5 @@
 
-export function generateRoomId(length: number) {
+export function generateLobbyId(length: number) {
     var result = '';
     var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     var charactersLength = characters.length;

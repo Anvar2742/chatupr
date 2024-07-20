@@ -29,17 +29,20 @@ model User {
   tasks                     Task[]
   files                     File[]
 
-  game                      Game?            @relation(fields: [gameId], references: [id])
-  gameId                    String?             
+  createdLobby              Lobby?          @relation("CreatedLobby")
+  joinedLobby               Lobby?          @relation("JoinedLobbies", fields: [lobbyId], references: [id])
+  lobbyId                   String?      // Foreign key to the Lobby model        
 }
 
-model Game {
+model Lobby {
   id                        String          @id @default(uuid())
+  roomId                    String?         @unique 
+  description               String?
+  creatorId                 String          @unique // Foreign key to the User model, must be unique for one-to-one relation
+  creator                   User            @relation("CreatedLobby", fields: [creatorId], references: [id])
+  members                   User[]          @relation("JoinedLobbies")
   createdAt                 DateTime        @default(now())
-
-  hostId                    String
-
-  users                     User[]
+  updatedAt                 DateTime        @updatedAt
 }
 
 model GptResponse {

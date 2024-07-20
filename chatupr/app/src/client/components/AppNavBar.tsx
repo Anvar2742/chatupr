@@ -13,7 +13,7 @@ import DarkModeSwitcher from './DarkModeSwitcher';
 
 const navigation = [
   { name: 'AI Scheduler (Demo App)', href: routes.DemoAppRoute.build() },
-  { name: 'File Upload (AWS S3)', href: routes.FileUploadRoute.build() },
+  { name: 'Lobby', href: routes.LobbyRoute.build() },
   { name: 'Pricing', href: routes.PricingPageRoute.build() },
   { name: 'Documentation', href: DocsUrl },
   { name: 'Blog', href: BlogUrl },

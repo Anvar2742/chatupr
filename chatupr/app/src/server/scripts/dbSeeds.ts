@@ -3,7 +3,7 @@ import { faker } from '@faker-js/faker';
 import type { PrismaClient } from '@prisma/client';
 import { getSubscriptionPaymentPlanIds, type SubscriptionStatus } from '../../payment/plans';
 
-type MockUserData = Omit<User, 'id'>;
+type MockUserData = Omit<User, 'id' | "lobbyId">;
 
 /**
  * This function, which we've imported in `app.db.seeds` in the `main.wasp` file,
@@ -11,7 +11,7 @@ type MockUserData = Omit<User, 'id'>;
  * For more info see: https://wasp-lang.dev/docs/data-model/backends#seeding-the-database
  */
 export async function seedMockUsers(prismaClient: PrismaClient) {
-  await Promise.all(generateMockUsersData(50).map((data) => 
+  await Promise.all(generateMockUsersData(50).map((data) =>
     prismaClient.user.create({ data }))
   );
 }
@@ -28,7 +28,7 @@ function generateMockUserData(): MockUserData {
   const createdAt = faker.date.past({ refDate: now });
   const lastActiveTimestamp = faker.date.between({ from: createdAt, to: now });
   const credits = subscriptionStatus ? 0 : faker.number.int({ min: 0, max: 10 });
-  const hasUserPaidOnStripe = !!subscriptionStatus || credits > 3 
+  const hasUserPaidOnStripe = !!subscriptionStatus || credits > 3
   return {
     email: faker.internet.email({ firstName, lastName }),
     username: faker.internet.userName({ firstName, lastName }),
@@ -42,6 +42,5 @@ function generateMockUserData(): MockUserData {
     datePaid: hasUserPaidOnStripe ? faker.date.between({ from: createdAt, to: lastActiveTimestamp }) : null,
     checkoutSessionId: hasUserPaidOnStripe ? `cs_test_${faker.string.uuid()}` : null,
     subscriptionPlan: subscriptionStatus ? faker.helpers.arrayElement(getSubscriptionPaymentPlanIds()) : null,
-    gameId: ""
   };
 }
