@@ -1,19 +1,22 @@
-import { createLobby } from 'wasp/server/operations';
+import { Socket } from 'socket.io';
+import { v4 as uuidv4 } from 'uuid'
 import { type WebSocketDefinition, type WaspSocketData } from 'wasp/server/webSocket'
 
 export const webSocketFn: WebSocketFn = (io, context) => {
-
+    interface socketUser { socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>; username: string; isReady: boolean; }
+    let storeObj: Record<string, socketUser> = {};
     io.on('connection', (socket) => {
         if (!socket.data.user) return;
 
-        const username = socket.data.user.getFirstProviderUserId() ?? 'Unknown'
+        const username = socket.data.user.getFirstProviderUserId() ?? "-1"
+        if (username === "-1") return;
+
         console.log('a user connected: ', username)
 
         socket.on('lobbyOperation', async (options) => {
             if (!socket.data.user) return;
             if (!options.lobbyId) return;
             const clients = io.sockets.adapter.rooms.get(options.lobbyId);
-            let storeObj = [];
 
             if (options.action === 'create') {
                 // Check if lobby size is equal to zero
@@ -22,15 +25,8 @@ export const webSocketFn: WebSocketFn = (io, context) => {
 
                 if (clients?.size === 0 || !clients) {
                     await socket.join(options.lobbyId);
-                    storeObj.push({ id: socket.id, username, isReady: false })
-
+                    storeObj[username] = { socket: socket, username, isReady: false }
                     console.info(`[CREATE] Client created and joined lobby ${options.lobbyId}`);
-                    // io.emit('lobbyOperation', {
-                    //     lobbyId: options.lobbyId,
-                    //     lobbyStatus: "alive",
-                    //     clients: storeObj
-                    // }); c
-
                     console.log("creating lobby")
                     // await createLobby({ name: options.lobbyId }, { user: socket.data.user });
 
@@ -46,12 +42,14 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                 //     If yes, join the socket to the lobby
                 //     If not, emit 'invalid operation: lobby does not exist'
                 console.log(clients?.size);
-                
+
                 if (clients?.size && clients?.size > 0) {
                     await socket.join(options.lobbyId);
-                    storeObj.push({ id: socket.id, username, isReady: false })
+                    storeObj[username] = { socket: socket, username, isReady: false }
 
                     console.info(`[JOIN] Client joined lobby ${options.lobbyId}`);
+                    // console.log(storeObj);
+
                     // io.emit('lobbyOperation', {
                     //     lobbyId: options.lobbyId,
                     //     lobbyStatus: "alive",
@@ -64,6 +62,36 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                 return false;
             }
         })
+
+        socket.on('chatMessage', async (msgInfo) => {
+            try {
+                // Validate msgInfo
+                if (!msgInfo || !msgInfo.to || !msgInfo.msg) {
+                    console.log(msgInfo);
+                    
+                    throw new Error("Invalid message information.");
+                }
+
+                // Define the recipients
+                const recipients = [msgInfo.to, username];
+                const message = {
+                    id: uuidv4(),
+                    username,
+                    text: msgInfo.msg
+                };
+
+                // Send the message to each recipient
+                recipients.forEach((recipient) => {
+                    if (storeObj[recipient] && storeObj[recipient].socket) {
+                        storeObj[recipient].socket.emit("chatMessage", message);
+                    } else {
+                        console.warn(`Recipient ${recipient} not found or not connected.`);
+                    }
+                }); 
+            } catch (error) {
+                console.error("Error handling chatMessage event:", error);
+            }
+        });
     })
 }
 
@@ -78,7 +106,9 @@ type WebSocketFn = WebSocketDefinition<
 >
 
 interface ServerToClientEvents {
-    chatMessage: (msg: { id: string, username: string, text: string }) => void;
+    chatMessage: (msg: {
+        id: string, username: string, text: string
+    }) => void;
     lobbyOperation: (lobbyInfo: {
         lobbyId: string, lobbyStatus: string, clients: {
             id: string;
@@ -89,7 +119,7 @@ interface ServerToClientEvents {
 }
 
 interface ClientToServerEvents {
-    chatMessage: (msg: string) => void;
+    chatMessage: (msgInfo: { msg: string, to: string }) => void;
     lobbyOperation: (lobbyOptions: { action: string, lobbyId: string }) => void;
 }
 
