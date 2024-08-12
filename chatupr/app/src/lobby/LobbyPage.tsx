@@ -8,49 +8,49 @@ import {
 import { generateLobbyId } from './utils';
 import { createLobby, getUserLobby, joinLobby } from 'wasp/client/operations'
 import { AuthUser } from 'wasp/auth';
+import { Lobby } from 'wasp/entities';
+import avatarPlaceholder from '../client/static/avatar-placeholder.png';
+import { useHistory } from 'react-router-dom';
 
 export const LobbyPage = ({ user }: { user: AuthUser }) => {
+    const history = useHistory();
     // The "socket" instance is typed with the types you defined on the server.
     const { socket, isConnected } = useSocket()
 
-    const [lobbyInfo, setLobbyInfo] = useState<{ lobbyId: string }>({ lobbyId: "" })
+    const [lobbyInfo, setLobbyInfo] = useState<Lobby>()
+    const [lobbyMembers, setLobbyMembers] = useState<{ username: string; isReady: boolean; }[]>()
+    // This is a type-safe event handler: "chatMessage" event and its payload type
+    // are defined on the server.
+    useSocketListener('lobbyOperation', updateLobbyInfo)
 
-    const [msgOptions, setMsgOptions] = useState<
-        // We are using a helper type to get the payload type for the "chatMessage" event.
-        ClientToServerPayload<'chatMessage'>
-    >({ msg: "", to: "anvarmusa12@gmail.com" })
-    const [messages, setMessages] = useState<
-        ServerToClientPayload<'chatMessage'>[]
-    >([])
+    function updateLobbyInfo(serverLobbyInfo: ServerToClientPayload<'lobbyOperation'>) {
+        setLobbyMembers(serverLobbyInfo.clients);
+    }
 
-    /**
-     * ChatWindows.tsx
-     * 
-     */
 
-    useEffect(() => { 
+    useEffect(() => {
         let isCancelled = false;
 
-        const handleGetUserLobby = async () => {
+        const handleLobbyOperations = async () => {
             try {
                 const lobby = await getUserLobby();
                 if (!isCancelled) {
-                    console.log(lobby);
 
                     if (lobby) {
                         if (!lobby.roomId) return
-                        console.log(user.getFirstProviderUserId());
-                        console.log(lobby.creatorId);
+                        console.log(lobby);
+
 
                         socket.emit('lobbyOperation', { lobbyId: lobby.roomId, action: lobby.creatorId === user.id ? "create" : "join" });
                         await joinLobby({ roomId: lobby.roomId });
-                        setLobbyInfo({ lobbyId: lobby.roomId });
+                        setLobbyInfo(lobby);
                     } else {
                         const newLobbyId = generateLobbyId(5);
-                        setLobbyInfo({ lobbyId: newLobbyId });
                         socket.emit('lobbyOperation', { lobbyId: newLobbyId, action: "create" });
                         // TODO: move this to websocket.ts
                         await createLobby({ roomId: newLobbyId });
+                        const newLobby = await getUserLobby();
+                        setLobbyInfo(newLobby);
                     }
                 }
             } catch (err: any) {
@@ -61,7 +61,7 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
         };
 
         if (isConnected) {
-            handleGetUserLobby();
+            handleLobbyOperations();
         }
 
         return () => {
@@ -69,27 +69,19 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
         };
     }, [socket, isConnected]);
 
-    // This is a type-safe event handler: "chatMessage" event and its payload type
-    // are defined on the server.
-    useSocketListener('chatMessage', logMessage)
+    useEffect(() => {
+        if (lobbyMembers?.length) {
+            const readyMembers = lobbyMembers.filter((member) => member.isReady)
+            if (readyMembers.length === lobbyMembers.length) {
+                history.push("/chat")
+            }
+        }
+    }, [lobbyMembers])
 
-    function logMessage(msg: ServerToClientPayload<'chatMessage'>) {
-        setMessages((priorMessages) => [msg, ...priorMessages])
+    const UpdateReadyState = () => {
+        if (!lobbyInfo?.roomId) return;
+        socket.emit('lobbyOperation', { lobbyId: lobbyInfo?.roomId, action: "ready" });
     }
-
-    function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
-        // This is a type-safe event emitter: "chatMessage" event and its payload type
-        // are defined on the server.
-        socket.emit('chatMessage', { msg: msgOptions.msg, to: msgOptions.to })
-        setMsgOptions({ msg: "", to: "anvarmusa12@gmail.com" })
-    }
-
-    const messageList = messages.map((msg) => (
-        <li key={msg.id}>
-            <em>{msg.username}</em>: {msg.text}
-        </li>
-    ))
 
     const connectionIcon = isConnected ? '🟢' : '🔴'
 
@@ -97,28 +89,29 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
         <>
             <div className='py-32 lg:mt-10'>
                 <div className='mx-auto max-w-7xl px-6 lg:px-8'>
-                    <h2>Connection: {connectionIcon}</h2>
-                    <h2 className='text-2xl font-bold'>Welcome to Chat UPR!</h2>
-                    <h2 className='text-lg font-bold'>Lobby ID: {lobbyInfo.lobbyId}</h2>
-                    <h3>Invite your friends: {window.location.origin}/join/{lobbyInfo.lobbyId}</h3>
+                    <h1 className='text-6xl font-bold text-center mb-10'>Welcome to Chat UPR!</h1>
+                    <p className='text-lg bg-white p-4 fixed bottom-0 right-0 border shadow-2xl shadow-black'>Your connection: {connectionIcon}</p>
+                    <h2 className='text-lg font-bold'>Lobby ID: {lobbyInfo?.roomId}</h2>
+                    <h3>Invite your friends: {window.location.origin}/join/{lobbyInfo?.roomId}</h3>
 
-                    <form onSubmit={handleSubmit}>
-                        <div>
-                            <div>
-                                <input
-                                    type="text"
-                                    value={msgOptions.msg}
-                                    onChange={(e) => setMsgOptions((msgPrior) => {
-                                        return { msg: e.target.value, to: msgPrior.to }
-                                    })}
-                                />
-                            </div>
-                            <div>
-                                <button type="submit">Submit</button>
-                            </div>
-                        </div>
-                    </form>
-                    <ul>{messageList}</ul>
+                    <h2 className='text-4xl font-bold my-10'>Players:</h2>
+                    <div className='max-w-lg grid gap-4'>
+                        {lobbyMembers?.map(member => {
+                            return (
+                                <div className='flex items-center justify-between w-full' key={member.username}>
+                                    <div>
+                                        <img src={avatarPlaceholder} alt="" className='w-25' />
+                                    </div>
+                                    <div>
+                                        <p>{member.username}</p>
+                                        <p>{member.isReady ? "ready" : "not ready"}</p>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+
+                    <button onClick={UpdateReadyState}>Ready</button>
                 </div>
             </div>
         </>

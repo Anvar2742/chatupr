@@ -141,6 +141,12 @@ page JoinLobbyPage {
   authRequired: true,
 }
 
+route GameRoute { path: "/chat", to: GamePage }
+page GamePage {
+  component: import { GamePage } from "@src/lobby/GamePage",
+  authRequired: true,
+}
+
 //#endregion
 
 //#region User
@@ -217,6 +223,11 @@ action joinLobby {
 query getUserLobby {
   fn: import { getUserLobby } from "@src/lobby/actions",
   entities: [Lobby]
+}
+
+query getAllUsersLobby {
+  fn: import { getAllUsersLobby } from "@src/lobby/actions",
+  entities: [Lobby, User]
 }
 
 //#region Payment
