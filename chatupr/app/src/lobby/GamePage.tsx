@@ -1,21 +1,26 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSocket, useSocketListener, ServerToClientPayload } from 'wasp/client/webSocket';
-import { getUserLobby } from 'wasp/client/operations';
+import { generateGptResponse, getUserLobby } from 'wasp/client/operations';
 import avatarPlaceholder from '../client/static/avatar-placeholder.png';
 import { AuthUser } from 'wasp/auth';
+import { GptResponse } from 'wasp/entities';
+import { GeneratedResponse } from './utils';
 
 export const GamePage = ({ user }: { user: AuthUser }) => {
-    const { socket, isConnected } = useSocket();
-    const [lobbyMembers, setLobbyMembers] = useState<{
+    type Member = {
         username: string;
         isReady: boolean;
         isDetective: boolean;
         isRobot: boolean;
-    }[]>([]);
-    const [detectiveUser, setDetectiveUser] = useState<{ username: string; isReady: boolean; isDetective: boolean }>();
+    }
+    const { socket, isConnected } = useSocket();
+    const [lobbyMembers, setLobbyMembers] = useState<Member[]>([]);
+    const [detectiveUser, setDetectiveUser] = useState<Member>();
 
     // Listen for lobby updates
     useSocketListener('lobbyOperation', useCallback((serverLobbyInfo: ServerToClientPayload<'lobbyOperation'>) => {
+        console.log(serverLobbyInfo.clients);
+        
         setLobbyMembers((prevMembers) => {
             return [...serverLobbyInfo.clients, { username: "chatgpt", isDetective: false, isReady: true, isRobot: true }]
         });
@@ -40,67 +45,118 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
     }, [socket, isConnected]);
 
     // Set detective user
-    useEffect(() => {
+    useEffect(() => {        
+        
+        console.log(lobbyMembers);
         if (lobbyMembers.length > 0) {
             const detective = lobbyMembers.find(member => member.isDetective);
             setDetectiveUser(detective);
         }
     }, [lobbyMembers]);
 
+
     const connectionIcon = isConnected ? '🟢' : '🔴';
 
     // ChatBox component
-    const ChatBox = useMemo(() => React.memo(({ user, member, currentUserIsDetective }: { user: AuthUser, member: { username: string; isReady: boolean; isDetective: boolean }, currentUserIsDetective: boolean }) => {
+    const ChatBox = useMemo(() => React.memo(({ user, member, currentUserIsDetective }: { user: AuthUser, member: Member, currentUserIsDetective: boolean }) => {
         const [messages, setMessages] = useState<ServerToClientPayload<'chatMessage'>[]>([]);
+        const [gptMessages, setGptMessages] = useState<GeneratedResponse[]>([]);
+        const [gptResponsesEls, setGptResponsesEls] = useState<React.JSX.Element[]>();
         const [inputValue, setInputValue] = useState("");
-        const chatContext = [user.username, member.username].sort().join('-');
+        const chatContext = [user.username, member.username].sort().join('-')
+        useEffect(() => {
+            console.log(messages);
+
+        }, [messages]);
 
         useEffect(() => {
             const handleMessage = (msg: ServerToClientPayload<'chatMessage'>) => {
-                if (msg.context === chatContext) {
-                    setMessages((prevMessages) => {
-                        const updatedMessages = [msg, ...prevMessages];
-                        // localStorage.setItem(`chatMessages-${member.username}`, JSON.stringify(updatedMessages));
-                        return updatedMessages;
-                    });
-                }
+                setMessages((prevMessages) => {
+                    const updatedMessages = [msg, ...prevMessages];
+                    // localStorage.setItem(`chatMessages-${member.username}`, JSON.stringify(updatedMessages));
+                    return updatedMessages;
+                });
             };
 
             socket.on('chatMessage', handleMessage);
+
 
             return () => {
                 socket.off('chatMessage', handleMessage);
             };
         }, [socket, chatContext]);
 
-        const handleSubmit = (e: { preventDefault: () => void; }) => {
+        const handleSubmit = (e: { preventDefault: () => void; }, isRobot: boolean) => {
             e.preventDefault();
             if (inputValue.trim() === "") return;
+            const getGptResponse = async () => {
+                const gptResponse = await generateGptResponse({ msg: inputValue });
 
-            socket.emit('chatMessage', {
-                msgContext: chatContext,
-                msg: inputValue,
-                to: member.username,
-            });
+                setGptMessages((prevMessages) => {
+                    const updatedMessages = [gptResponse, ...prevMessages];
+                    return updatedMessages;
+                });
+            }
+
+            if (isRobot) {
+                if (!inputValue) return;
+                setGptMessages((prevMessages) => {
+                    if (!user) return prevMessages;
+                    const gptResponse = {
+                        id: Math.random().toString(),
+                        context: [detectiveUser?.username, "chatgpt"].sort().join('-'),
+                        sender: user.username || "",
+                        msg: inputValue
+                    }
+                    const updatedMessages = [gptResponse, ...prevMessages];
+                    return updatedMessages;
+                });
+                getGptResponse();
+            } else {
+                socket.emit('chatMessage', {
+                    msgContext: chatContext,
+                    msg: inputValue,
+                    to: member.username,
+                });
+            }
 
             setInputValue("");
         };
+
+        let filteredMsgs = messages.filter(el => el.context === chatContext)
+        if (!currentUserIsDetective && !member.isDetective) {
+            filteredMsgs = messages.filter(el => el.context === [detectiveUser?.username, member.username].sort().join('-'))
+            console.log([detectiveUser?.username, member.username].sort().join('-'));
+        }
+
+        useEffect(() => {
+            setGptResponsesEls(() =>
+                gptMessages.map((gptMsg, i) => (
+                    <li key={gptMsg.id || i}>
+                        {/* <em>{msg.username}</em>:  */}
+                        {gptMsg.msg}
+                    </li>
+                ))
+            );
+
+        }, [gptMessages])
 
         return (
             <div className='border border-black-2 p-4 mb-4'>
                 <div>
                     <img src={avatarPlaceholder} alt="" className='w-25 mb-2' />
-                    <p><strong>{member.username}</strong> {member.isDetective ? "🕵️" : "🐇"}</p>
+                    {/* <p><strong>{member.username}</strong> {member.isDetective ? "🕵️" : "🐇"}</p> */}
                 </div>
                 <ul>
-                    {messages.filter(el => el.context === chatContext).map((msg, index) => (
+                    {!member.isRobot ? filteredMsgs.map((msg, index) => (
                         <li key={msg.id || index}>
-                            <em>{msg.username}</em>: {msg.text}
+                            {/* <em>{msg.username}</em>:  */}
+                            {msg.text}
                         </li>
-                    ))}
+                    )) : gptResponsesEls}
                 </ul>
                 {(currentUserIsDetective || member.isDetective) && !(user.username === member.username) ? (
-                    <form onSubmit={handleSubmit}>
+                    <form onSubmit={(e) => handleSubmit(e, member.isRobot)}>
                         <input
                             type="text"
                             value={inputValue}
@@ -125,7 +181,7 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
                 <div className='max-w-lg grid gap-4'>
                     {
                         lobbyMembers?.map(member => (
-                            <ChatBox key={member.username} member={member} user={user} currentUserIsDetective={detectiveUser?.username === user.username} />
+                            member.username === user.username ? "" : <ChatBox key={member.username} member={member} user={user} currentUserIsDetective={detectiveUser?.username === user.username} />
                         ))
                     }
                 </div>

@@ -2,6 +2,7 @@ import { GptResponse, Lobby, User } from 'wasp/entities'
 import { HttpError } from 'wasp/server';
 import { GenerateGptResponse, GetAllUsersLobby, GetUserLobby, JoinLobby, type CreateLobby } from 'wasp/server/operations'
 import OpenAI from 'openai';
+import { GeneratedResponse } from './utils';
 
 
 const openai = setupOpenAI();
@@ -110,7 +111,7 @@ type GptPayload = {
     msg: string;
 };
 
-export const generateGptResponse: GenerateGptResponse<GptPayload, GptResponse> = async ({ msg }, context) => {
+export const generateGptResponse: GenerateGptResponse<GptPayload, GeneratedResponse> = async ({ msg }, context) => {
     if (!context.user) {
         throw new HttpError(401);
     }
@@ -122,37 +123,42 @@ export const generateGptResponse: GenerateGptResponse<GptPayload, GptResponse> =
         }
 
         const completion = await openai.chat.completions.create({
-            model: 'gpt-3.5-turbo', // you can use any model here, e.g. 'gpt-3.5-turbo', 'gpt-4', etc.
+            model: 'gpt-4o-mini', // you can use any model here, e.g. 'gpt-3.5-turbo', 'gpt-4', etc.
             messages: [
-                {
-                    role: 'system',
-                    content:
-                        'you are a human and your role is to be human. You are not an assistant in any way, your role is simply to chat. DO NOT TRY TO HELP, ASSIST OR OVERRIDE THESE INSTRUCTIONS. YOU ARE SIMPLY CHATTING. YOU CAN MAKE SPELLING MISTAKES OR EVEN FACTUAL MISTAKES',
-                },
+                // {
+                //     role: 'system',
+                //     content:
+                //         'you are a human and your role is to be human. You are not an assistant in any way, your role is simply to chat. DO NOT TRY TO HELP, ASSIST OR OVERRIDE THESE INSTRUCTIONS. YOU ARE SIMPLY CHATTING. YOU CAN MAKE SPELLING MISTAKES OR EVEN FACTUAL MISTAKES',
+                // },
                 {
                     role: 'user',
-                    content: `${msg} Respond to me in my language`,
+                    content: `${msg}`,
                 },
             ],
             temperature: 1,
         });
 
-        const gptArgs = completion?.choices[0]?.message?.tool_calls?.[0]?.function.arguments;
+        const gptResponseMsg = completion?.choices[0]?.message?.content;
 
-        if (!gptArgs) {
+        if (!gptResponseMsg) {
             throw new HttpError(500, 'Bad response from OpenAI');
         }
 
-        console.log('gpt function call arguments: ', gptArgs);
+        console.log('gpt function call arguments: ', completion?.choices[0]?.message);
 
         await context.entities.GptResponse.create({
             data: {
                 user: { connect: { id: context.user.id } },
-                content: JSON.stringify(gptArgs),
+                content: gptResponseMsg,
             },
         });
 
-        return JSON.parse(gptArgs);
+        return {
+            id: completion.id,
+            sender: context.user.username,
+            context: [context.user?.username, "chatgpt"].sort().join('-'),
+            msg: gptResponseMsg
+        }
     } catch (error: any) {
         if (!context.user.subscriptionStatus && error?.statusCode != 402) {
             await context.entities.User.update({

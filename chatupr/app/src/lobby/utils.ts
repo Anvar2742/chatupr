@@ -8,3 +8,10 @@ export function generateLobbyId(length: number) {
     }
     return result;
 }
+
+export type GeneratedResponse = {
+    id: string;
+    sender: string;
+    context: string;
+    msg: string;
+};

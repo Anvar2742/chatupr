@@ -33,21 +33,17 @@ export const webSocketFn: WebSocketFn = (io, context) => {
             const clients = io.sockets.adapter.rooms.get(lobbyId);
 
             if (options.action === "join") {
-                console.log("CLIENTS SIZE: " + clients?.size);
-                console.log("CONNECTED CLIENTS: " + lobby.connectedClients.length);
-
                 if (clients?.size && clients.size > 0) {
                     await socket.join(lobbyId);
                     lobby.storeObj[username] = { socket: socket };
 
-                    const hasUser = lobby.connectedClients.find(client => client.username === username);
-                    if (!hasUser) {
+                    // Use `find` to check if the user already exists
+                    const existingUser = lobby.connectedClients.find(client => client.username === username);
+                    if (!existingUser) {
                         const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
-                        const isDetective = lobbyFromDb?.detectiveId === username
+                        const isDetective = lobbyFromDb?.detectiveId === username;
                         lobby.connectedClients.push({ username, isReady: false, isDetective, isRobot: false });
                     }
-
-                    console.info(`[JOIN] Client joined lobby ${lobbyId}`);
 
                     io.to(lobbyId).emit('lobbyOperation', {
                         lobbyId: lobbyId,
@@ -56,11 +52,12 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     });
                 } else {
                     // Clear and reinitialize the lobby if it was previously empty
-                    lobby.connectedClients.splice(0, lobby.connectedClients.length);
+                    lobby.connectedClients = [];
                     await socket.join(lobbyId);
                     lobby.storeObj[username] = { socket: socket };
+
                     const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
-                    const isDetective = lobbyFromDb?.detectiveId === username
+                    const isDetective = lobbyFromDb?.detectiveId === username;
                     lobby.connectedClients.push({ username, isReady: false, isDetective, isRobot: false });
 
                     console.info(`[CREATE] Client created and joined lobby ${lobbyId}`);
@@ -72,6 +69,31 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     });
                 }
             }
+
+            socket.on('disconnect', () => {
+                // Handle user disconnect, removing them from the lobby if necessary
+                for (const lobbyId in lobbies) {
+                    const lobby = lobbies[lobbyId];
+                    const userIndex = lobby.connectedClients.findIndex(client => client.username === username);
+                    if (userIndex !== -1) {
+                        lobby.connectedClients.splice(userIndex, 1);
+                        delete lobby.storeObj[username];
+
+                        // Notify others in the lobby about the disconnection
+                        io.to(lobbyId).emit('lobbyOperation', {
+                            lobbyId: lobbyId,
+                            lobbyStatus: "updated",
+                            clients: lobby.connectedClients
+                        });
+
+                        // Optionally, clean up the lobby if no users are left
+                        if (lobby.connectedClients.length === 0) {
+                            delete lobbies[lobbyId];
+                        }
+                        break;
+                    }
+                }
+            });
 
             if (options.action === "fetch") {
                 if (clients?.size && clients?.size > 0) {
@@ -154,32 +176,6 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                 console.error("Error handling chatMessage event:", error);
             }
         });
-
-
-        socket.on('disconnect', () => {
-            // Handle user disconnect, removing them from the lobby if necessary
-            for (const lobbyId in lobbies) {
-                const lobby = lobbies[lobbyId];
-                const userIndex = lobby.connectedClients.findIndex(client => client.username === username);
-                if (userIndex !== -1) {
-                    lobby.connectedClients.splice(userIndex, 1);
-                    delete lobby.storeObj[username];
-
-                    // Notify others in the lobby about the disconnection
-                    io.to(lobbyId).emit('lobbyOperation', {
-                        lobbyId: lobbyId,
-                        lobbyStatus: "updated",
-                        clients: lobby.connectedClients
-                    });
-
-                    // Optionally, clean up the lobby if no users are left
-                    if (lobby.connectedClients.length === 0) {
-                        delete lobbies[lobbyId];
-                    }
-                    break;
-                }
-            }
-        })
     })
 }
 
