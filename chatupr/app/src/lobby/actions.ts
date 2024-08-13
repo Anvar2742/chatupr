@@ -21,9 +21,8 @@ export const createLobby: CreateLobby<Pick<Lobby, "roomId">, Lobby> = async (
     const lobby = await context.entities.Lobby.create({
         data: {
             roomId: args.roomId,
-            description: "cool",
             members: { connect: { id: context.user.id } },
-            creatorId: context.user.id
+            creatorId: context.user.id,
         },
     });
 
@@ -39,7 +38,6 @@ export const joinLobby: JoinLobby<Pick<Lobby, "roomId">, Lobby> = async (
 
     const lobby = await context.entities.Lobby.update({
         data: {
-            description: "cool",
             members: { connect: { id: context.user.id } },
         },
         where: {

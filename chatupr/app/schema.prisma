@@ -38,6 +38,7 @@ model Lobby {
   id                        String          @id @default(uuid())
   roomId                    String?         @unique
   creatorId                 String          @unique // Foreign key to the User model, must be unique for one-to-one relation
+  detectiveId               String          @unique @default(uuid())
   creator                   User            @relation("CreatedLobby", fields: [creatorId], references: [id])
   members                   User[]          @relation("JoinedLobbies")
   lobbyState                String          @default("alive")

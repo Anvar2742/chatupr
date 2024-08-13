@@ -41,12 +41,12 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
                         console.log(lobby);
 
 
-                        socket.emit('lobbyOperation', { lobbyId: lobby.roomId, action: lobby.creatorId === user.id ? "create" : "join" });
+                        socket.emit('lobbyOperation', { lobbyId: lobby.roomId, action: "join" });
                         await joinLobby({ roomId: lobby.roomId });
                         setLobbyInfo(lobby);
                     } else {
                         const newLobbyId = generateLobbyId(5);
-                        socket.emit('lobbyOperation', { lobbyId: newLobbyId, action: "create" });
+                        socket.emit('lobbyOperation', { lobbyId: newLobbyId, action: "join" });
                         // TODO: move this to websocket.ts
                         await createLobby({ roomId: newLobbyId });
                         const newLobby = await getUserLobby();

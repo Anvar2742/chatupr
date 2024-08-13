@@ -1,74 +1,76 @@
 import { Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid'
+import { randomIntFromInterval } from 'wasp/ext-src/server/utils';
 import { type WebSocketDefinition, type WaspSocketData } from 'wasp/server/webSocket'
 
 export const webSocketFn: WebSocketFn = (io, context) => {
     interface socketUser { socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>; }
-    let storeObj: Record<string, socketUser> = {};
-    let connectedClients: { username: string; isReady: boolean; }[] = []
+
+    let lobbies: Record<string, { storeObj: Record<string, socketUser>; connectedClients: { username: string; isReady: boolean; isDetective: boolean; }[] }> = {}; // Object to store lobbies data
 
     io.on('connection', (socket) => {
         if (!socket.data.user) return;
 
-        const username = socket.data.user.getFirstProviderUserId() ?? "-1"
+        const username = socket.data.user.getFirstProviderUserId() ?? "-1";
         if (username === "-1") return;
 
-        console.log('a user connected: ', username)
+        console.log('a user connected: ', username);
 
         socket.on('lobbyOperation', async (options) => {
-            if (!socket.data.user) return;
-            if (!options.lobbyId) return;
-            const clients = io.sockets.adapter.rooms.get(options.lobbyId);
+            if (!socket.data.user || !options.lobbyId) return;
 
-            if (options.action === 'create') {
-                // Check if lobby size is equal to zero
-                //     If yes, create new lobby and join socket to the lobby
-                //     If not, emit 'invalid operation: lobby already exists'
+            const lobbyId = options.lobbyId;
 
-                if (clients?.size === 0 || !clients) {
-                    await socket.join(options.lobbyId);
-                    storeObj[username] = { socket: socket }
-                    connectedClients.push({ username, isReady: false })
-                    console.info(`[CREATE] Client created and joined lobby ${options.lobbyId}`);
-                    console.log("creating lobby")
-                    // await createLobby({ name: options.lobbyId }, { user: socket.data.user });
-                    io.emit('lobbyOperation', {
-                        lobbyId: options.lobbyId,
-                        lobbyStatus: "alive",
-                        clients: connectedClients
-                    });
-
-                    return true;
-                }
-
-                console.warn(`[CREATE FAILED] Client denied create, as lobbyId ${options.lobbyId} already present`);
-                return false;
+            // Initialize the lobby if it doesn't exist
+            if (!lobbies[lobbyId]) {
+                lobbies[lobbyId] = {
+                    storeObj: {},
+                    connectedClients: []
+                };
             }
 
+            const lobby = lobbies[lobbyId];
+            const clients = io.sockets.adapter.rooms.get(lobbyId);
+
             if (options.action === "join") {
-                // Check if lobby size is equal to or more than 1
-                //     If yes, join the socket to the lobby
-                //     If not, emit 'invalid operation: lobby does not exist'
-                console.log(clients?.size);
+                console.log("CLIENTS SIZE: " + clients?.size);
+                console.log("CONNECTED CLIENTS: " + lobby.connectedClients.length);
 
-                if (clients?.size && clients?.size > 0) {
-                    await socket.join(options.lobbyId);
-                    storeObj[username] = { socket: socket }
-                    connectedClients.push({ username, isReady: false })
+                if (clients?.size && clients.size > 0) {
+                    await socket.join(lobbyId);
+                    lobby.storeObj[username] = { socket: socket };
 
-                    console.info(`[JOIN] Client joined lobby ${options.lobbyId}`);
-                    // console.log(storeObj);
+                    const hasUser = lobby.connectedClients.find(client => client.username === username);
+                    if (!hasUser) {
+                        const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
+                        const isDetective = lobbyFromDb.detectiveId === username
+                        lobby.connectedClients.push({ username, isReady: false, isDetective });
+                    }
 
-                    io.emit('lobbyOperation', {
-                        lobbyId: options.lobbyId,
+                    console.info(`[JOIN] Client joined lobby ${lobbyId}`);
+
+                    io.to(lobbyId).emit('lobbyOperation', {
+                        lobbyId: lobbyId,
                         lobbyStatus: "alive",
-                        clients: connectedClients
+                        clients: lobby.connectedClients
                     });
-                    return true;
-                }
+                } else {
+                    // Clear and reinitialize the lobby if it was previously empty
+                    lobby.connectedClients.splice(0, lobby.connectedClients.length);
+                    await socket.join(lobbyId);
+                    lobby.storeObj[username] = { socket: socket };
+                    const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
+                    const isDetective = lobbyFromDb?.detectiveId === username
+                    lobby.connectedClients.push({ username, isReady: false, isDetective });
 
-                console.warn(`[JOIN FAILED] Client denied join.`);
-                return false;
+                    console.info(`[CREATE] Client created and joined lobby ${lobbyId}`);
+
+                    io.to(lobbyId).emit('lobbyOperation', {
+                        lobbyId: lobbyId,
+                        lobbyStatus: "alive",
+                        clients: lobby.connectedClients
+                    });
+                }
             }
 
             if (options.action === "fetch") {
@@ -76,16 +78,16 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     io.emit('lobbyOperation', {
                         lobbyId: options.lobbyId,
                         lobbyStatus: "alive",
-                        clients: connectedClients
+                        clients: lobbies[lobbyId].connectedClients
                     });
                 }
 
-                console.warn(`[JOIN FAILED] Client denied join.`);
+                console.warn(`[FETCH FAILED] Client denied fetch.`);
                 return false;
             }
 
             if (options.action === "ready") {
-                connectedClients = connectedClients.map(client => {
+                lobbies[lobbyId].connectedClients = lobbies[lobbyId].connectedClients.map(client => {
                     if (client.username === username) {
                         client.isReady = !client.isReady
                     }
@@ -94,72 +96,97 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                 })
 
                 if (clients?.size && clients?.size > 0) {
-                    io.emit("lobbyOperation", {
-                        lobbyId: options.lobbyId,
-                        lobbyStatus: "alive",
-                        clients: connectedClients
-                    })
-                    // await context.entities.Lobby.update({
-                    //     where: {
-                    //         roomId: options.lobbyId,
-                    //     },
-                    //     data: {
-                    //         members: {
-                    //             update: {
-                    //                 where: {
-                    //                     username,
-                    //                 },
-                    //                 data: {
-                                        
-                    //                 }
-                    //             }
-                    //         }
-                    //     },
-                    // })
+                    const readyClients = lobbies[lobbyId].connectedClients.filter(client => client.isReady)
+                    if (readyClients.length === lobbies[lobbyId].connectedClients.length) {
+                        io.emit("lobbyOperation", {
+                            lobbyId: options.lobbyId,
+                            lobbyStatus: "game",
+                            clients: lobbies[lobbyId].connectedClients
+                        })
+                        const randNum = randomIntFromInterval(0, lobbies[lobbyId].connectedClients.length - 1);
+                        let copUsername = ""
+                        lobbies[lobbyId].connectedClients = lobbies[lobbyId].connectedClients.map((client, i) => {
+                            if (randNum === i) {
+                                client.isDetective = true;
+                                copUsername = client.username
+                            }
+                            return client;
+                        })
+
+                        await context.entities.Lobby.update({
+                            where: {
+                                roomId: options.lobbyId,
+                            },
+                            data: {
+                                lobbyState: "game",
+                                detectiveId: copUsername
+                            }
+                        })
+                    } else {
+                        io.emit("lobbyOperation", {
+                            lobbyId: options.lobbyId,
+                            lobbyStatus: "alive",
+                            clients: lobbies[lobbyId].connectedClients
+                        })
+                    }
                 }
             }
         })
 
         socket.on('chatMessage', async (msgInfo) => {
             try {
-                // Validate msgInfo
                 if (!msgInfo || !msgInfo.to || !msgInfo.msg) {
                     console.log(msgInfo);
-
                     throw new Error("Invalid message information.");
                 }
 
-                // Define the recipients
-                const recipients = [msgInfo.to, username];
+                const sender = username;
+                const recipient = msgInfo.to;
                 const message = {
                     id: uuidv4(),
-                    username,
+                    username: sender,
                     text: msgInfo.msg
                 };
 
-                // Send the message to each recipient
-                recipients.forEach((recipient) => {
-                    if (storeObj[recipient] && storeObj[recipient].socket) {
-                        storeObj[recipient].socket.emit("chatMessage", message);
-                    } else {
-                        console.warn(`Recipient ${recipient} not found or not connected.`);
+                for (const lobbyId in lobbies) {
+                    const lobby = lobbies[lobbyId];
+                    const senderIndex = lobby.connectedClients.findIndex(client => client.username === sender);
+                    const recipientIndex = lobby.connectedClients.findIndex(client => client.username === recipient);
+
+                    if (senderIndex !== -1 && recipientIndex !== -1) {
+                        // Create a unique chat context key for the detective and each rabbit
+                        const chatContext = [sender, recipient].sort().join('-'); // e.g., 'detective-rabbit1'
+                        io.emit("chatMessage", { ...message, context: chatContext })
                     }
-                });
+                }
             } catch (error) {
                 console.error("Error handling chatMessage event:", error);
             }
         });
 
-        socket.on("disconnect", async () => {
-            try {
-                for (let i = 0; i < connectedClients.length; i++) {
-                    const el = connectedClients[i];
-                    if (el.username === username) {
-                        connectedClients.splice(i, 1)
+
+        socket.on('disconnect', () => {
+            // Handle user disconnect, removing them from the lobby if necessary
+            for (const lobbyId in lobbies) {
+                const lobby = lobbies[lobbyId];
+                const userIndex = lobby.connectedClients.findIndex(client => client.username === username);
+                if (userIndex !== -1) {
+                    lobby.connectedClients.splice(userIndex, 1);
+                    delete lobby.storeObj[username];
+
+                    // Notify others in the lobby about the disconnection
+                    io.to(lobbyId).emit('lobbyOperation', {
+                        lobbyId: lobbyId,
+                        lobbyStatus: "updated",
+                        clients: lobby.connectedClients
+                    });
+
+                    // Optionally, clean up the lobby if no users are left
+                    if (lobby.connectedClients.length === 0) {
+                        delete lobbies[lobbyId];
                     }
+                    break;
                 }
-            } catch (error) {
-                console.error("Error handling disconnect event:", error);
             }
         })
     })
@@ -177,12 +204,13 @@ type WebSocketFn = WebSocketDefinition<
 
 interface ServerToClientEvents {
     chatMessage: (msg: {
-        id: string, username: string, text: string
+        id: string, username: string, context: string, text: string
     }) => void;
     lobbyOperation: (serverLobbyInfo: {
         lobbyId: string, lobbyStatus: string, clients: {
             username: string;
             isReady: boolean;
+            isDetective: boolean;
         }[]
     }) => void;
 }
