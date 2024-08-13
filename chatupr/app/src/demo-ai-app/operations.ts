@@ -1,5 +1,5 @@
 import type { Task, GptResponse } from 'wasp/entities';
-import type { GenerateGptResponse, CreateTask, DeleteTask, UpdateTask, GetGptResponses, GetAllTasksByUser } from 'wasp/server/operations';
+import type { GenerateGptTask, CreateTask, DeleteTask, UpdateTask, GetGptResponses, GetAllTasksByUser } from 'wasp/server/operations';
 import { HttpError } from 'wasp/server';
 import { GeneratedSchedule } from './schedule';
 import OpenAI from 'openai';
@@ -17,7 +17,7 @@ type GptPayload = {
   hours: string;
 };
 
-export const generateGptResponse: GenerateGptResponse<GptPayload, GeneratedSchedule> = async ({ hours }, context) => {
+export const generateGptTask: GenerateGptTask<GptPayload, GeneratedSchedule> = async ({ hours }, context) => {
   if (!context.user) {
     throw new HttpError(401);
   }

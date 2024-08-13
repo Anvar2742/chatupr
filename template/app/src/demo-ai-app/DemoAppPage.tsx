@@ -1,7 +1,7 @@
 import { type Task } from 'wasp/entities';
 
 import {
-  generateGptResponse,
+  GenerateGptTask,
   deleteTask,
   updateTask,
   createTask,
@@ -122,7 +122,7 @@ function NewTaskForm({ handleCreateTask }: { handleCreateTask: typeof createTask
   const handleGeneratePlan = async () => {
     try {
       setIsPlanGenerating(true);
-      const response = await generateGptResponse({
+      const response = await generateGptTask({
         hours: todaysHours,
       });
       if (response) {

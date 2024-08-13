@@ -179,8 +179,8 @@ page DemoAppPage {
   component: import DemoAppPage from "@src/demo-ai-app/DemoAppPage"
 }
 
-action generateGptResponse {
-  fn: import { generateGptResponse } from "@src/demo-ai-app/operations",
+action generateGptTask {
+  fn: import { generateGptTask } from "@src/demo-ai-app/operations",
   entities: [User, Task, GptResponse]
 }
 
@@ -218,6 +218,11 @@ action createLobby {
 action joinLobby {
   fn: import { joinLobby } from "@src/lobby/actions",
   entities: [Lobby]
+}
+
+action generateGptResponse {
+  fn: import { generateGptResponse } from "@src/lobby/actions",
+  entities: [Lobby, GptResponse, User]
 }
 
 query getUserLobby {

@@ -6,7 +6,7 @@ import { type WebSocketDefinition, type WaspSocketData } from 'wasp/server/webSo
 export const webSocketFn: WebSocketFn = (io, context) => {
     interface socketUser { socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>; }
 
-    let lobbies: Record<string, { storeObj: Record<string, socketUser>; connectedClients: { username: string; isReady: boolean; isDetective: boolean; }[] }> = {}; // Object to store lobbies data
+    let lobbies: Record<string, { storeObj: Record<string, socketUser>; connectedClients: { username: string; isReady: boolean; isDetective: boolean; isRobot: boolean; }[] }> = {}; // Object to store lobbies data
 
     io.on('connection', (socket) => {
         if (!socket.data.user) return;
@@ -43,8 +43,8 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     const hasUser = lobby.connectedClients.find(client => client.username === username);
                     if (!hasUser) {
                         const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
-                        const isDetective = lobbyFromDb.detectiveId === username
-                        lobby.connectedClients.push({ username, isReady: false, isDetective });
+                        const isDetective = lobbyFromDb?.detectiveId === username
+                        lobby.connectedClients.push({ username, isReady: false, isDetective, isRobot: false });
                     }
 
                     console.info(`[JOIN] Client joined lobby ${lobbyId}`);
@@ -61,7 +61,7 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     lobby.storeObj[username] = { socket: socket };
                     const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
                     const isDetective = lobbyFromDb?.detectiveId === username
-                    lobby.connectedClients.push({ username, isReady: false, isDetective });
+                    lobby.connectedClients.push({ username, isReady: false, isDetective, isRobot: false });
 
                     console.info(`[CREATE] Client created and joined lobby ${lobbyId}`);
 
@@ -135,7 +135,7 @@ export const webSocketFn: WebSocketFn = (io, context) => {
 
         socket.on('chatMessage', async (msgInfo) => {
             try {
-                if (!msgInfo || !msgInfo.to || !msgInfo.msg) {
+                if (!msgInfo || !msgInfo.to || !msgInfo.msg || !msgInfo.msgContext) {
                     console.log(msgInfo);
                     throw new Error("Invalid message information.");
                 }
@@ -145,20 +145,11 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                 const message = {
                     id: uuidv4(),
                     username: sender,
-                    text: msgInfo.msg
+                    text: msgInfo.msg,
+                    to: recipient
                 };
 
-                for (const lobbyId in lobbies) {
-                    const lobby = lobbies[lobbyId];
-                    const senderIndex = lobby.connectedClients.findIndex(client => client.username === sender);
-                    const recipientIndex = lobby.connectedClients.findIndex(client => client.username === recipient);
-
-                    if (senderIndex !== -1 && recipientIndex !== -1) {
-                        // Create a unique chat context key for the detective and each rabbit
-                        const chatContext = [sender, recipient].sort().join('-'); // e.g., 'detective-rabbit1'
-                        io.emit("chatMessage", { ...message, context: chatContext })
-                    }
-                }
+                io.emit("chatMessage", { ...message, context: msgInfo.msgContext })
             } catch (error) {
                 console.error("Error handling chatMessage event:", error);
             }
@@ -211,12 +202,13 @@ interface ServerToClientEvents {
             username: string;
             isReady: boolean;
             isDetective: boolean;
+            isRobot: boolean;
         }[]
     }) => void;
 }
 
 interface ClientToServerEvents {
-    chatMessage: (msgInfo: { msg: string, to: string }) => void;
+    chatMessage: (msgInfo: { msgContext: string, msg: string, to: string }) => void;
     lobbyOperation: (lobbyOptions: { action: string, lobbyId: string }) => void;
 }
 
