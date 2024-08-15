@@ -19,8 +19,8 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
 
     // Listen for lobby updates
     useSocketListener('lobbyOperation', useCallback((serverLobbyInfo: ServerToClientPayload<'lobbyOperation'>) => {
-        console.log(serverLobbyInfo.clients);
-        
+        // console.log(serverLobbyInfo.clients);
+
         setLobbyMembers((prevMembers) => {
             return [...serverLobbyInfo.clients, { username: "chatgpt", isDetective: false, isReady: true, isRobot: true }]
         });
@@ -45,9 +45,9 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
     }, [socket, isConnected]);
 
     // Set detective user
-    useEffect(() => {        
-        
-        console.log(lobbyMembers);
+    useEffect(() => {
+
+        // console.log(lobbyMembers);
         if (lobbyMembers.length > 0) {
             const detective = lobbyMembers.find(member => member.isDetective);
             setDetectiveUser(detective);
@@ -69,6 +69,17 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
 
         }, [messages]);
 
+        const getGptResponse = async (msgVal: string) => {
+            const gptResponse = await generateGptResponse({ msg: msgVal });
+            if (gptResponse.msg.trim() === "") return;
+            socket.emit('chatMessage', {
+                msgContext: gptResponse.context,
+                msg: gptResponse.msg,
+                to: gptResponse.sender,
+                isRobot: true
+            });
+        }
+
         useEffect(() => {
             const handleMessage = (msg: ServerToClientPayload<'chatMessage'>) => {
                 setMessages((prevMessages) => {
@@ -80,7 +91,6 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
 
             socket.on('chatMessage', handleMessage);
 
-
             return () => {
                 socket.off('chatMessage', handleMessage);
             };
@@ -89,36 +99,16 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
         const handleSubmit = (e: { preventDefault: () => void; }, isRobot: boolean) => {
             e.preventDefault();
             if (inputValue.trim() === "") return;
-            const getGptResponse = async () => {
-                const gptResponse = await generateGptResponse({ msg: inputValue });
 
-                setGptMessages((prevMessages) => {
-                    const updatedMessages = [gptResponse, ...prevMessages];
-                    return updatedMessages;
-                });
-            }
-
-            if (isRobot) {
-                if (!inputValue) return;
-                setGptMessages((prevMessages) => {
-                    if (!user) return prevMessages;
-                    const gptResponse = {
-                        id: Math.random().toString(),
-                        context: [detectiveUser?.username, "chatgpt"].sort().join('-'),
-                        sender: user.username || "",
-                        msg: inputValue
-                    }
-                    const updatedMessages = [gptResponse, ...prevMessages];
-                    return updatedMessages;
-                });
-                getGptResponse();
-            } else {
-                socket.emit('chatMessage', {
-                    msgContext: chatContext,
-                    msg: inputValue,
-                    to: member.username,
-                });
-            }
+            socket.emit('chatMessage', {
+                msgContext: chatContext,
+                msg: inputValue,
+                to: member.username,
+                isRobot
+            });
+            setTimeout(() => {
+                getGptResponse(inputValue);
+            }, 1000);
 
             setInputValue("");
         };
@@ -126,7 +116,7 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
         let filteredMsgs = messages.filter(el => el.context === chatContext)
         if (!currentUserIsDetective && !member.isDetective) {
             filteredMsgs = messages.filter(el => el.context === [detectiveUser?.username, member.username].sort().join('-'))
-            console.log([detectiveUser?.username, member.username].sort().join('-'));
+            // console.log([detectiveUser?.username, member.username].sort().join('-'));
         }
 
         useEffect(() => {
@@ -138,22 +128,21 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
                     </li>
                 ))
             );
-
         }, [gptMessages])
 
         return (
             <div className='border border-black-2 p-4 mb-4'>
                 <div>
                     <img src={avatarPlaceholder} alt="" className='w-25 mb-2' />
-                    {/* <p><strong>{member.username}</strong> {member.isDetective ? "🕵️" : "🐇"}</p> */}
+                    <p><strong>{member.username}</strong> {member.isDetective ? "🕵️" : "🐇"}</p>
                 </div>
                 <ul>
-                    {!member.isRobot ? filteredMsgs.map((msg, index) => (
+                    {filteredMsgs.map((msg, index) => (
                         <li key={msg.id || index}>
                             {/* <em>{msg.username}</em>:  */}
                             {msg.text}
                         </li>
-                    )) : gptResponsesEls}
+                    ))}
                 </ul>
                 {(currentUserIsDetective || member.isDetective) && !(user.username === member.username) ? (
                     <form onSubmit={(e) => handleSubmit(e, member.isRobot)}>

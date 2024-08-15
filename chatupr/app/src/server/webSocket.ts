@@ -171,7 +171,7 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     to: recipient
                 };
 
-                io.emit("chatMessage", { ...message, context: msgInfo.msgContext })
+                io.emit("chatMessage", { ...message, context: msgInfo.msgContext, isRobot: msgInfo.isRobot })
             } catch (error) {
                 console.error("Error handling chatMessage event:", error);
             }
@@ -191,7 +191,7 @@ type WebSocketFn = WebSocketDefinition<
 
 interface ServerToClientEvents {
     chatMessage: (msg: {
-        id: string, username: string, context: string, text: string
+        id: string, username: string, context: string, text: string, isRobot: boolean
     }) => void;
     lobbyOperation: (serverLobbyInfo: {
         lobbyId: string, lobbyStatus: string, clients: {
@@ -204,7 +204,7 @@ interface ServerToClientEvents {
 }
 
 interface ClientToServerEvents {
-    chatMessage: (msgInfo: { msgContext: string, msg: string, to: string }) => void;
+    chatMessage: (msgInfo: { msgContext: string, msg: string, to: string, isRobot: boolean }) => void;
     lobbyOperation: (lobbyOptions: { action: string, lobbyId: string }) => void;
 }
 
