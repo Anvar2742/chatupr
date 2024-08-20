@@ -3,8 +3,9 @@ import { useSocket, useSocketListener, ServerToClientPayload } from 'wasp/client
 import { generateGptResponse, getUserLobby } from 'wasp/client/operations';
 import avatarPlaceholder from '../client/static/avatar-placeholder.png';
 import { AuthUser } from 'wasp/auth';
-import { GptResponse } from 'wasp/entities';
+import { GptResponse, Lobby } from 'wasp/entities';
 import { GeneratedResponse } from './utils';
+import { useHistory } from 'react-router-dom';
 
 export const GamePage = ({ user }: { user: AuthUser }) => {
     type Member = {
@@ -16,11 +17,18 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
     const { socket, isConnected } = useSocket();
     const [lobbyMembers, setLobbyMembers] = useState<Member[]>([]);
     const [detectiveUser, setDetectiveUser] = useState<Member>();
+    const [lobbyInfo, setLobbyInfo] = useState<Lobby>()
+    const history = useHistory();
 
     // Listen for lobby updates
     useSocketListener('lobbyOperation', useCallback((serverLobbyInfo: ServerToClientPayload<'lobbyOperation'>) => {
-        // console.log(serverLobbyInfo.clients);
+        if (serverLobbyInfo.lobbyStatus === "dead") {
+            localStorage.removeItem("chatMessages");
+            history.push("/")
+        }
 
+        const detective = serverLobbyInfo.clients.find(member => member.isDetective);
+        setDetectiveUser(detective);
         setLobbyMembers((prevMembers) => {
             return [...serverLobbyInfo.clients, { username: "chatgpt", isDetective: false, isReady: true, isRobot: true }]
         });
@@ -33,6 +41,9 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
                 const lobby = await getUserLobby();
                 if (lobby?.roomId) {
                     socket.emit('lobbyOperation', { lobbyId: lobby.roomId, action: 'join' });
+                    setLobbyInfo(lobby);
+                } else {
+                    history.push("/")
                 }
             } catch (err: any) {
                 window.alert('Error: ' + (err.message || 'Something went wrong'));
@@ -44,30 +55,31 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
         }
     }, [socket, isConnected]);
 
-    // Set detective user
-    useEffect(() => {
-
-        // console.log(lobbyMembers);
-        if (lobbyMembers.length > 0) {
-            const detective = lobbyMembers.find(member => member.isDetective);
-            setDetectiveUser(detective);
-        }
-    }, [lobbyMembers]);
 
 
-    const connectionIcon = isConnected ? '🟢' : '🔴';
+    const leaveLobby = () => {
+        if (!lobbyInfo?.roomId) return;
+
+        socket.emit('lobbyOperation', { lobbyId: lobbyInfo?.roomId, action: "leave" });
+        localStorage.removeItem("chatMessages");
+        history.push("/")
+    }
+
+    const connectionIcon = isConnected ? '🟢' : '🔴'
 
     // ChatBox component
-    const ChatBox = useMemo(() => React.memo(({ user, member, currentUserIsDetective }: { user: AuthUser, member: Member, currentUserIsDetective: boolean }) => {
-        const [messages, setMessages] = useState<ServerToClientPayload<'chatMessage'>[]>([]);
-        const [gptMessages, setGptMessages] = useState<GeneratedResponse[]>([]);
-        const [gptResponsesEls, setGptResponsesEls] = useState<React.JSX.Element[]>();
+    const ChatBox = useMemo(() => React.memo(({ user, member, currentUserIsDetective, propsDetectiveUser }: { user: AuthUser, member: Member, currentUserIsDetective: boolean, propsDetectiveUser: Member | undefined }) => {
+        const [messages, setMessages] = useState<ServerToClientPayload<'chatMessage'>[]>(() => {
+            const storedMessages = localStorage.getItem("chatMessages");
+            return storedMessages ? JSON.parse(storedMessages) : [];
+        });
         const [inputValue, setInputValue] = useState("");
         const chatContext = [user.username, member.username].sort().join('-')
         useEffect(() => {
             console.log(messages);
 
         }, [messages]);
+        const [filteredMsgs, setFilteredMsgs] = useState<ServerToClientPayload<'chatMessage'>[]>();
 
         const getGptResponse = async (msgVal: string) => {
             const gptResponse = await generateGptResponse({ msg: msgVal });
@@ -82,9 +94,11 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
 
         useEffect(() => {
             const handleMessage = (msg: ServerToClientPayload<'chatMessage'>) => {
+                console.log(msg);
+
                 setMessages((prevMessages) => {
                     const updatedMessages = [msg, ...prevMessages];
-                    // localStorage.setItem(`chatMessages-${member.username}`, JSON.stringify(updatedMessages));
+                    localStorage.setItem("chatMessages", JSON.stringify(updatedMessages));
                     return updatedMessages;
                 });
             };
@@ -106,29 +120,24 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
                 to: member.username,
                 isRobot
             });
-            setTimeout(() => {
-                getGptResponse(inputValue);
-            }, 1000);
+
+            if (isRobot) {
+                setTimeout(() => {
+                    getGptResponse(inputValue);
+                }, 1000);
+            }
 
             setInputValue("");
         };
 
-        let filteredMsgs = messages.filter(el => el.context === chatContext)
-        if (!currentUserIsDetective && !member.isDetective) {
-            filteredMsgs = messages.filter(el => el.context === [detectiveUser?.username, member.username].sort().join('-'))
-            // console.log([detectiveUser?.username, member.username].sort().join('-'));
-        }
-
         useEffect(() => {
-            setGptResponsesEls(() =>
-                gptMessages.map((gptMsg, i) => (
-                    <li key={gptMsg.id || i}>
-                        {/* <em>{msg.username}</em>:  */}
-                        {gptMsg.msg}
-                    </li>
-                ))
-            );
-        }, [gptMessages])
+            setFilteredMsgs(() => {
+                if (!currentUserIsDetective && !member.isDetective) {
+                    return messages.filter(el => el.context === [propsDetectiveUser?.username, member.username].sort().join('-'))
+                }
+                return messages.filter(el => el.context === chatContext)
+            })
+        }, [messages])
 
         return (
             <div className='border border-black-2 p-4 mb-4'>
@@ -137,7 +146,7 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
                     <p><strong>{member.username}</strong> {member.isDetective ? "🕵️" : "🐇"}</p>
                 </div>
                 <ul>
-                    {filteredMsgs.map((msg, index) => (
+                    {filteredMsgs?.map((msg, index) => (
                         <li key={msg.id || index}>
                             {/* <em>{msg.username}</em>:  */}
                             {msg.text}
@@ -165,12 +174,16 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
     return (
         <div className='py-32 lg:mt-10'>
             <div className='mx-auto max-w-7xl px-6 lg:px-8'>
-                <h2>Connection: {connectionIcon}</h2>
                 <h2 className='text-2xl font-bold'>Welcome to Chat UPR!</h2>
+                <h3>{lobbyInfo?.roomId}</h3>
+                <p className='text-lg bg-white p-4 fixed bottom-0 right-0 border shadow-2xl shadow-black'>
+                    <span>Your connection: {connectionIcon}</span>
+                    <button onClick={leaveLobby} className='mt-2 p-2 bg-red-500 text-white rounded'>Leave</button>
+                </p>
                 <div className='max-w-lg grid gap-4'>
                     {
                         lobbyMembers?.map(member => (
-                            member.username === user.username ? "" : <ChatBox key={member.username} member={member} user={user} currentUserIsDetective={detectiveUser?.username === user.username} />
+                            member.username === user.username ? "" : <ChatBox key={member.username} member={member} user={user} currentUserIsDetective={detectiveUser?.username === user.username} propsDetectiveUser={detectiveUser} />
                         ))
                     }
                 </div>

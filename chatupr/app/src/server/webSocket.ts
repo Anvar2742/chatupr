@@ -108,11 +108,17 @@ export const webSocketFn: WebSocketFn = (io, context) => {
 
                     // Use `find` to check if the user already exists
                     const existingUser = lobby.connectedClients.find(client => client.username === username);
+
                     if (!existingUser) {
                         const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
                         const isDetective = lobbyFromDb?.detectiveId === username;
                         lobby.connectedClients.push({ username, isReady: false, isDetective, isRobot: false });
+
                     }
+                    console.log("clients: ", lobby.connectedClients);
+
+                    // Remove duplicate entries for the same user
+                    lobby.connectedClients = removeDuplicateClients(lobby.connectedClients);
 
                     io.to(lobbyId).emit('lobbyOperation', {
                         lobbyId: lobbyId,
@@ -159,6 +165,8 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                         if (lobby.connectedClients.length === 0) {
                             delete lobbies[lobbyId];
                         }
+                        console.log("after disconnect", lobby.connectedClients);
+
                         break;
                     }
                 }
@@ -283,3 +291,18 @@ interface InterServerEvents { }
 // NOTE: Wasp automatically injects the JWT into the connection,
 // and if present/valid, the server adds a user to the socket.
 interface SocketData extends WaspSocketData { }
+
+// Utility function to remove duplicates in connectedClients array
+function removeDuplicateClients(clients: any[]) {
+    const uniqueClients: any[] = [];
+    const usernames = new Set();
+
+    clients.forEach(client => {
+        if (!usernames.has(client.username)) {
+            usernames.add(client.username);
+            uniqueClients.push(client);
+        }
+    });
+
+    return uniqueClients;
+}

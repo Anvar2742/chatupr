@@ -18,12 +18,14 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
     const { socket, isConnected } = useSocket()
 
     const [lobbyInfo, setLobbyInfo] = useState<Lobby>()
+    const [isCopy, setIsCopy] = useState<boolean>(false)
     const [lobbyMembers, setLobbyMembers] = useState<{ username: string; isReady: boolean; }[]>()
     // This is a type-safe event handler: "chatMessage" event and its payload type
     // are defined on the server.
     useSocketListener('lobbyOperation', updateLobbyInfo)
 
     function updateLobbyInfo(serverLobbyInfo: ServerToClientPayload<'lobbyOperation'>) {
+        if (serverLobbyInfo.lobbyStatus === "dead") history.push("/")
         setLobbyMembers(serverLobbyInfo.clients);
     }
 
@@ -93,6 +95,14 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
 
     const connectionIcon = isConnected ? '🟢' : '🔴'
 
+    const copyInvite = () => {
+        navigator.clipboard.writeText(`${window.location.origin}/join/${lobbyInfo?.roomId}`)
+        setIsCopy(true)
+        setTimeout(() => {
+            setIsCopy(false)
+        }, 1000);
+    }
+
     return (
         <>
             <div className='py-32 lg:mt-10'>
@@ -103,7 +113,11 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
                         <button onClick={leaveLobby} className='mt-2 p-2 bg-red-500 text-white rounded'>Leave</button>
                     </p>
                     <h2 className='text-lg font-bold'>Lobby ID: {lobbyInfo?.roomId}</h2>
-                    <h3>Invite your friends: {window.location.origin}/join/{lobbyInfo?.roomId}</h3>
+                    <h3>Invite your friends:</h3>
+                    <p>
+                        {window.location.origin}/join/{lobbyInfo?.roomId}
+                        <button className={`mt-2 p-2 bg-blue-200 ml-5 rounded ${isCopy ? "bg-green-600" : ""}`} onClick={copyInvite}>{isCopy ? "Copied" : "Copy"}</button>
+                    </p>
 
                     <h2 className='text-4xl font-bold my-10'>Players:</h2>
                     <div className='max-w-lg grid gap-4'>
