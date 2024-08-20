@@ -32,6 +32,75 @@ export const webSocketFn: WebSocketFn = (io, context) => {
             const lobby = lobbies[lobbyId];
             const clients = io.sockets.adapter.rooms.get(lobbyId);
 
+            if (options.action === "leave") {
+                if (clients?.size && clients.size > 0) {
+                    console.log("trying to leave");
+
+                    const lobbyFromDb = await context.entities.Lobby.findUnique({
+                        where: { roomId: lobbyId },
+                        include: { members: true } // Ensure we include members to update them later
+                    });
+
+                    if (!lobbyFromDb) {
+                        console.error("Lobby not found");
+                        return;
+                    }
+
+                    const userId = socket.data.user?.id;
+                    if (!userId) {
+                        console.error("User not authenticated");
+                        return;
+                    }
+
+                    // Remove the player from the lobby's members in the database
+                    await context.entities.Lobby.update({
+                        where: { roomId: lobbyId },
+                        data: {
+                            members: {
+                                disconnect: { id: userId } // Disconnect the leaving member
+                            }
+                        }
+                    });
+
+                    // Remove the player from the lobby's connected clients
+                    const userIndex = lobby.connectedClients.findIndex(client => client.username === username);
+                    if (userIndex !== -1) {
+                        lobby.connectedClients.splice(userIndex, 1);
+                    }
+
+                    // Leave the socket room
+                    await socket.leave(lobbyId);
+
+                    if (lobbyFromDb.creatorId === userId || lobby.connectedClients.length === 0) {
+                        console.log("User is the host or it was the last client, deleting lobby");
+
+                        // Delete the lobby from the database
+                        await context.entities.Lobby.delete({ where: { roomId: lobbyId } });
+
+                        io.to(lobbyId).emit('lobbyOperation', {
+                            lobbyId: lobbyId,
+                            lobbyStatus: "dead",
+                            clients: []
+                        });
+
+                        // Optionally, clean up the in-memory lobby if no users are left
+                        if (lobby.connectedClients.length === 0) {
+                            delete lobbies[lobbyId];
+                        }
+                    } else {
+                        // Notify others in the lobby that a player has left
+                        io.to(lobbyId).emit('lobbyOperation', {
+                            lobbyId: lobbyId,
+                            lobbyStatus: "updated",
+                            clients: lobby.connectedClients
+                        });
+                    }
+                } else {
+                    console.error("No clients in the lobby or lobby doesn't exist");
+                }
+            }
+
+
             if (options.action === "join") {
                 if (clients?.size && clients.size > 0) {
                     await socket.join(lobbyId);

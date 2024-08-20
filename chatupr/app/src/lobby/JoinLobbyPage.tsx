@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { RouteComponentProps, useParams } from 'react-router-dom';
-import { getUserLobby, joinLobby } from 'wasp/client/operations';
+import { deleteUserLobby, getUserLobby, joinLobby } from 'wasp/client/operations';
 import {
     useSocket,
     useSocketListener,
@@ -19,11 +19,13 @@ export const JoinLobbyPage = (props: RouteComponentProps<{ joinCode: string }>) 
             try {
                 const lobby = await getUserLobby();
                 if (!isCancelled) {
-                    if (!lobby) {
-                        const joinCode = props.match.params.joinCode;
-                        socket.emit('lobbyOperation', { lobbyId: joinCode, action: "join" });
-                        await joinLobby({ roomId: joinCode });
+                    if (lobby) {
+                        // delete current lobby
+                        deleteUserLobby(lobby.roomId || "")
                     }
+                    const joinCode = props.match.params.joinCode;
+                    socket.emit('lobbyOperation', { lobbyId: joinCode, action: "join" });
+                    await joinLobby({ roomId: joinCode });
 
                     window.location.href = window.location.origin + "/lobby";
                 }

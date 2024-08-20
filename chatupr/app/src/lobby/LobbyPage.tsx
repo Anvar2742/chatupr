@@ -78,9 +78,17 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
         }
     }, [lobbyMembers])
 
-    const UpdateReadyState = () => {
+    const updateReadyState = () => {
         if (!lobbyInfo?.roomId) return;
         socket.emit('lobbyOperation', { lobbyId: lobbyInfo?.roomId, action: "ready" });
+    }
+
+    const leaveLobby = () => {
+        console.log("leaving");
+
+        if (!lobbyInfo?.roomId) return;
+        socket.emit('lobbyOperation', { lobbyId: lobbyInfo?.roomId, action: "leave" });
+        history.push("/")
     }
 
     const connectionIcon = isConnected ? '🟢' : '🔴'
@@ -90,7 +98,10 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
             <div className='py-32 lg:mt-10'>
                 <div className='mx-auto max-w-7xl px-6 lg:px-8'>
                     <h1 className='text-6xl font-bold text-center mb-10'>Welcome to Chat UPR!</h1>
-                    <p className='text-lg bg-white p-4 fixed bottom-0 right-0 border shadow-2xl shadow-black'>Your connection: {connectionIcon}</p>
+                    <p className='text-lg bg-white p-4 fixed bottom-0 right-0 border shadow-2xl shadow-black'>
+                        <span>Your connection: {connectionIcon}</span>
+                        <button onClick={leaveLobby} className='mt-2 p-2 bg-red-500 text-white rounded'>Leave</button>
+                    </p>
                     <h2 className='text-lg font-bold'>Lobby ID: {lobbyInfo?.roomId}</h2>
                     <h3>Invite your friends: {window.location.origin}/join/{lobbyInfo?.roomId}</h3>
 
@@ -111,7 +122,7 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
                         })}
                     </div>
 
-                    <button onClick={UpdateReadyState}>Ready</button>
+                    <button onClick={updateReadyState} className='mt-2 p-2 bg-green-500 text-white rounded'>Ready</button>
                 </div>
             </div>
         </>

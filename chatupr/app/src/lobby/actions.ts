@@ -1,6 +1,6 @@
 import { GptResponse, Lobby, User } from 'wasp/entities'
 import { HttpError } from 'wasp/server';
-import { GenerateGptResponse, GetAllUsersLobby, GetUserLobby, JoinLobby, type CreateLobby } from 'wasp/server/operations'
+import { DeleteUserLobby, GenerateGptResponse, GetAllUsersLobby, GetUserLobby, JoinLobby, type CreateLobby } from 'wasp/server/operations'
 import OpenAI from 'openai';
 import { GeneratedResponse } from './utils';
 
@@ -77,6 +77,25 @@ export const getUserLobby: GetUserLobby<void, Lobby> = async (_args, context) =>
     });
 
     return userLobby
+}
+
+export const deleteUserLobby: DeleteUserLobby<string, void> = async (args, context) => {
+    if (!context.user) {
+        throw new HttpError(401);
+    }
+
+    const userLobby = await context.entities.Lobby.findUnique({
+        where: {
+            roomId: args,
+        }
+    });
+
+    if (userLobby?.creatorId === context.user.id) {
+        await context.entities.Lobby.delete({ where: { id: userLobby.id } })
+        return;
+    }
+
+    console.warn("NOT THE HOST");
 }
 
 
