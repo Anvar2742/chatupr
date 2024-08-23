@@ -1,6 +1,6 @@
-import { GptResponse, Lobby, User } from 'wasp/entities'
+import { GptResponse, Lobby, LobbyMessage, User } from 'wasp/entities'
 import { HttpError } from 'wasp/server';
-import { DeleteUserLobby, GenerateGptResponse, GetAllUsersLobby, GetUserLobby, JoinLobby, type CreateLobby } from 'wasp/server/operations'
+import { DeleteUserLobby, GenerateGptResponse, GetAllUsersLobby, GetLobbyMsgs, GetUserLobby, JoinLobby, type CreateLobby } from 'wasp/server/operations'
 import OpenAI from 'openai';
 import { GeneratedResponse } from './utils';
 
@@ -198,3 +198,12 @@ export const generateGptResponse: GenerateGptResponse<GptPayload, GeneratedRespo
         throw new HttpError(statusCode, errorMessage);
     }
 };
+
+export const getLobbyMsgs: GetLobbyMsgs<string, LobbyMessage[]> = async (lobbyId, context) => {
+    if (!context.user) {
+        throw new HttpError(401);
+    }
+
+    const lobbyMsgs = await context.entities.LobbyMessage.findMany({ where: { lobbyId } });
+    return lobbyMsgs
+}

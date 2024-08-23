@@ -225,6 +225,11 @@ action generateGptResponse {
   entities: [Lobby, GptResponse, User]
 }
 
+action getLobbyMsgs {
+  fn: import { getLobbyMsgs } from "@src/lobby/actions",
+  entities: [Lobby, LobbyMessage, User]
+}
+
 query getUserLobby {
   fn: import { getUserLobby } from "@src/lobby/actions",
   entities: [Lobby]

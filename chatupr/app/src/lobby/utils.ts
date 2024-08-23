@@ -33,3 +33,10 @@ export function shuffle(array: any) {
 
     return array;
 }
+
+export type Member = {
+    username: string;
+    isReady: boolean;
+    isDetective: boolean;
+    isRobot: boolean;
+}

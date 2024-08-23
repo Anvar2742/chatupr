@@ -77,6 +77,12 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                         // Delete the lobby from the database
                         await context.entities.Lobby.delete({ where: { roomId: lobbyId } });
 
+                        const msgs = await context.entities.LobbyMessage.findFirst({ where: { lobbyId: lobbyId } })
+
+                        if (msgs) {
+                            await context.entities.LobbyMessage.deleteMany({ where: { lobbyId: lobbyId } });
+                        }
+
                         io.to(lobbyId).emit('lobbyOperation', {
                             lobbyId: lobbyId,
                             lobbyStatus: "dead",
@@ -232,24 +238,38 @@ export const webSocketFn: WebSocketFn = (io, context) => {
             }
         })
 
-        socket.on('chatMessage', async (msgInfo) => {
+        socket.on('chatMessage', async (msgInfo: chatMessageClientToServer) => {
             try {
-                if (!msgInfo || !msgInfo.to || !msgInfo.msg || !msgInfo.msgContext) {
-                    console.log(msgInfo);
+                if (!msgInfo || !msgInfo.toUser || !msgInfo.content || !msgInfo.context) {
                     throw new Error("Invalid message information.");
                 }
 
                 const sender = msgInfo.isRobot ? "chatgpt" : username
-                const recipient = msgInfo.to;
+                const recipient = msgInfo.toUser;
                 const message = {
-                    id: uuidv4(),
-                    username: sender,
-                    text: msgInfo.msg,
-                    to: recipient,
-                    createdAt: Date.now()
+                    fromUser: sender,
+                    content: msgInfo.content,
+                    toUser: recipient,
+                    lobbyId: msgInfo.lobbyId,
                 };
 
-                io.emit("chatMessage", { ...message, context: msgInfo.msgContext, isRobot: msgInfo.isRobot })
+                const dbLobbyMsg = await context.entities.LobbyMessage.create({
+                    data: {
+                        fromUser: sender,
+                        toUser: recipient,
+                        lobbyId: msgInfo.lobbyId,
+                        content: msgInfo.content,
+                        context: msgInfo.context,
+                        isRobot: msgInfo.isRobot
+                    }
+                });
+
+                io.emit("chatMessage", {
+                    ...message,
+                    context: msgInfo.context,
+                    isRobot: msgInfo.isRobot,
+                    createdAt: dbLobbyMsg.createdAt
+                })
             } catch (error) {
                 console.error("Error handling chatMessage event:", error);
             }
@@ -267,10 +287,14 @@ type WebSocketFn = WebSocketDefinition<
     SocketData
 >
 
+type chatMessageServerToClient = {
+    fromUser: string, context: string, content: string, isRobot: boolean, toUser: string, createdAt: Date, lobbyId: string
+}
+
+type chatMessageClientToServer = { context: string, content: string, toUser: string, isRobot: boolean, lobbyId: string }
+
 interface ServerToClientEvents {
-    chatMessage: (msg: {
-        id: string, username: string, context: string, text: string, isRobot: boolean, to: string, createdAt: number
-    }) => void;
+    chatMessage: (msg: chatMessageServerToClient) => void;
     lobbyOperation: (serverLobbyInfo: {
         lobbyId: string, lobbyStatus: string, clients: {
             username: string;
@@ -282,7 +306,7 @@ interface ServerToClientEvents {
 }
 
 interface ClientToServerEvents {
-    chatMessage: (msgInfo: { msgContext: string, msg: string, to: string, isRobot: boolean, createdAt: number }) => void;
+    chatMessage: (msgInfo: chatMessageClientToServer) => void;
     lobbyOperation: (lobbyOptions: { action: string, lobbyId: string }) => void;
 }
 

@@ -57,6 +57,20 @@ model GptResponse {
   content                   String
 }
 
+model LobbyMessage {
+  id                        String          @id @default(uuid())
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+
+  isRobot                   Boolean
+  lobbyId                   String
+  fromUser                  String
+  toUser                    String
+  context                   String
+
+  content                   String
+}
+
 model Task {
   id                        String          @id @default(uuid())
   createdAt                 DateTime        @default(now())
