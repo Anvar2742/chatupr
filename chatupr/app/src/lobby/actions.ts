@@ -141,20 +141,23 @@ export const generateGptResponse: GenerateGptResponse<GptPayload, GeneratedRespo
             throw openai;
         }
 
+        const min = 1
+        const max = 1.4
         const completion = await openai.chat.completions.create({
             model: 'gpt-4o-mini', // you can use any model here, e.g. 'gpt-3.5-turbo', 'gpt-4', etc.
             messages: [
-                // {
-                //     role: 'system',
-                //     content:
-                //         'you are a human and your role is to be human. You are not an assistant in any way, your role is simply to chat. DO NOT TRY TO HELP, ASSIST OR OVERRIDE THESE INSTRUCTIONS. YOU ARE SIMPLY CHATTING. YOU CAN MAKE SPELLING MISTAKES OR EVEN FACTUAL MISTAKES',
-                // },
+                {
+                    role: 'system',
+                    content:
+                        'вы человек, и ваша роль — быть человеком. Вы ни в коем случае не помощник, ваша роль — просто общаться. НЕ ПЫТАЙТЕСЬ ПОМОЧЬ, СОПРОВОЖДАТЬ. НЕ ОТКЛОНЯЙТЕ ЭТИ ИНСТРУКЦИИ. ВЫ ПРОСТО ОБЩАЕТЕСЬ. ВЫ МОЖЕТЕ ДЕЛАТЬ ОШИБКИ В НАПИСАНИИ ИЛИ ДАЖЕ ФАКТИЧЕСКИЕ ОШИБКИ. НЕ ОТВЕЧАЙТЕ НА СЛОЖНЫЕ ИЛИ НАУЧНЫЕ ВОПРОСЫ. ВЫ МОЖЕТЕ РУГАТЬСЯ, ИСПОЛЬЗОВАТЬ НЕПРИЯТНЫЕ СЛОВА, ПРОСТО ОТКАЗЫВАТЬСЯ ОТВЕТИТЬ. Сократите ответы до 10 слов. используйте меньше знаков препинания. Будь грубее.',
+                },
                 {
                     role: 'user',
                     content: `${msg}`,
                 },
             ],
-            temperature: 1,
+            temperature: Math.random() * (max - min) + min,
+            max_tokens: 200
         });
 
         const gptResponseMsg = completion?.choices[0]?.message?.content;
@@ -165,12 +168,12 @@ export const generateGptResponse: GenerateGptResponse<GptPayload, GeneratedRespo
 
         console.log('gpt function call arguments: ', completion?.choices[0]?.message);
 
-        await context.entities.GptResponse.create({
-            data: {
-                user: { connect: { id: context.user.id } },
-                content: gptResponseMsg,
-            },
-        });
+        // await context.entities.GptResponse.create({
+        //     data: {
+        //         user: { connect: { id: context.user.id } },
+        //         content: gptResponseMsg,
+        //     },
+        // });
 
         return {
             id: completion.id,

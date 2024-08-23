@@ -239,13 +239,14 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     throw new Error("Invalid message information.");
                 }
 
-                const sender = username;
+                const sender = msgInfo.isRobot ? "chatgpt" : username
                 const recipient = msgInfo.to;
                 const message = {
                     id: uuidv4(),
                     username: sender,
                     text: msgInfo.msg,
-                    to: recipient
+                    to: recipient,
+                    createdAt: Date.now()
                 };
 
                 io.emit("chatMessage", { ...message, context: msgInfo.msgContext, isRobot: msgInfo.isRobot })
@@ -268,7 +269,7 @@ type WebSocketFn = WebSocketDefinition<
 
 interface ServerToClientEvents {
     chatMessage: (msg: {
-        id: string, username: string, context: string, text: string, isRobot: boolean
+        id: string, username: string, context: string, text: string, isRobot: boolean, to: string, createdAt: number
     }) => void;
     lobbyOperation: (serverLobbyInfo: {
         lobbyId: string, lobbyStatus: string, clients: {
@@ -281,7 +282,7 @@ interface ServerToClientEvents {
 }
 
 interface ClientToServerEvents {
-    chatMessage: (msgInfo: { msgContext: string, msg: string, to: string, isRobot: boolean }) => void;
+    chatMessage: (msgInfo: { msgContext: string, msg: string, to: string, isRobot: boolean, createdAt: number }) => void;
     lobbyOperation: (lobbyOptions: { action: string, lobbyId: string }) => void;
 }
 

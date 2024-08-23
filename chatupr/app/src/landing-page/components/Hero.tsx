@@ -33,7 +33,7 @@ export default function Hero() {
               Some <span className='italic'>cool</span> words about your product
             </h1>
             <p className='mt-6 mx-auto max-w-2xl text-lg leading-8 text-gray-600 dark:text-white'>
-              With some more exciting words about your product!
+              With some more exciting words about your product! hey!
             </p>
             <div className='mt-10 flex items-center justify-center gap-x-6'>
               <a
