@@ -72,8 +72,6 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     await socket.leave(lobbyId);
 
                     if (lobbyFromDb.creatorId === userId || lobby.connectedClients.length === 0) {
-                        console.log("User is the host or it was the last client, deleting lobby");
-
                         // Delete the lobby from the database
                         await context.entities.Lobby.delete({ where: { roomId: lobbyId } });
 
@@ -117,11 +115,13 @@ export const webSocketFn: WebSocketFn = (io, context) => {
 
                     if (!existingUser) {
                         const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
-                        const isDetective = lobbyFromDb?.detectiveId === username;
-                        lobby.connectedClients.push({ username, isReady: false, isDetective, isRobot: false });
+                        // const isDetective = lobbyFromDb?.detectiveId === username;
+                        lobby.connectedClients.push({ username, isReady: false, isDetective: false, isRobot: false });
 
+                        const oneDayInMilliseconds = 24 * 60 * 60 * 1000;
+                        const expiresAt = new Date(Date.now() + oneDayInMilliseconds);
+                        await context.entities.LobbySession.create({ data: { username: username, isReady: false, isDetective: false, isHost: true, lobbyId, expiresAt } })
                     }
-                    console.log("clients: ", lobby.connectedClients);
 
                     // Remove duplicate entries for the same user
                     lobby.connectedClients = removeDuplicateClients(lobby.connectedClients);
@@ -138,8 +138,12 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     lobby.storeObj[username] = { socket: socket };
 
                     const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
-                    const isDetective = lobbyFromDb?.detectiveId === username;
+                    // const isDetective = lobbyFromDb?.detectiveId === username;
                     lobby.connectedClients.push({ username, isReady: false, isDetective, isRobot: false });
+
+                    const oneDayInMilliseconds = 24 * 60 * 60 * 1000;
+                    const expiresAt = new Date(Date.now() + oneDayInMilliseconds);
+                    await context.entities.LobbySession.create({ data: { username: username, isReady: false, isDetective: false, isHost: true, lobbyId, expiresAt } })
 
                     console.info(`[CREATE] Client created and joined lobby ${lobbyId}`);
 

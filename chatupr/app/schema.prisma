@@ -71,6 +71,19 @@ model LobbyMessage {
   content                   String
 }
 
+model LobbySession {
+  id                        String          @id @default(uuid())
+  createdAt                 DateTime        @default(now())
+  expiresAt                 DateTime        
+
+  username                  String
+  isReady                   Boolean
+  isDetective               Boolean
+  isHost                    Boolean
+  lobbyId                   String
+  // canTalk (no need for this one 'cause I can detect that by last message)                  
+}
+
 model Task {
   id                        String          @id @default(uuid())
   createdAt                 DateTime        @default(now())
