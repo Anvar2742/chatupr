@@ -13,18 +13,22 @@ CREATE TABLE "User" (
     "sendNewsletter" BOOLEAN NOT NULL DEFAULT false,
     "datePaid" TIMESTAMP(3),
     "credits" INTEGER NOT NULL DEFAULT 3,
-    "gameId" TEXT,
+    "lobbyId" TEXT,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Game" (
+CREATE TABLE "Lobby" (
     "id" TEXT NOT NULL,
+    "roomId" TEXT,
+    "creatorId" TEXT NOT NULL,
+    "detectiveId" TEXT NOT NULL,
+    "lobbyState" TEXT NOT NULL DEFAULT 'alive',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "hostId" TEXT NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Game_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Lobby_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -36,6 +40,35 @@ CREATE TABLE "GptResponse" (
     "content" TEXT NOT NULL,
 
     CONSTRAINT "GptResponse_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LobbyMessage" (
+    "id" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "isRobot" BOOLEAN NOT NULL,
+    "lobbyId" TEXT NOT NULL,
+    "fromUser" TEXT NOT NULL,
+    "toUser" TEXT NOT NULL,
+    "context" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+
+    CONSTRAINT "LobbyMessage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LobbySession" (
+    "id" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "username" TEXT NOT NULL,
+    "isReady" BOOLEAN NOT NULL,
+    "isDetective" BOOLEAN NOT NULL,
+    "isHost" BOOLEAN NOT NULL,
+    "lobbyId" TEXT NOT NULL,
+
+    CONSTRAINT "LobbySession_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -148,6 +181,15 @@ CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
 CREATE UNIQUE INDEX "User_stripeId_key" ON "User"("stripeId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Lobby_roomId_key" ON "Lobby"("roomId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Lobby_creatorId_key" ON "Lobby"("creatorId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Lobby_detectiveId_key" ON "Lobby"("detectiveId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "DailyStats_date_key" ON "DailyStats"("date");
 
 -- CreateIndex
@@ -160,7 +202,10 @@ CREATE UNIQUE INDEX "Session_id_key" ON "Session"("id");
 CREATE INDEX "Session_userId_idx" ON "Session"("userId");
 
 -- AddForeignKey
-ALTER TABLE "User" ADD CONSTRAINT "User_gameId_fkey" FOREIGN KEY ("gameId") REFERENCES "Game"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "User" ADD CONSTRAINT "User_lobbyId_fkey" FOREIGN KEY ("lobbyId") REFERENCES "Lobby"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Lobby" ADD CONSTRAINT "Lobby_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "GptResponse" ADD CONSTRAINT "GptResponse_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

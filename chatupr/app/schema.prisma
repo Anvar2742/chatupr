@@ -76,7 +76,7 @@ model LobbySession {
   createdAt                 DateTime        @default(now())
   expiresAt                 DateTime        
 
-  username                  String
+  username                  String          @unique
   isReady                   Boolean
   isDetective               Boolean
   isHost                    Boolean

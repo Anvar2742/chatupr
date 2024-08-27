@@ -3,23 +3,21 @@ import {
     useSocket,
     useSocketListener,
     ServerToClientPayload,
-    ClientToServerPayload,
 } from 'wasp/client/webSocket'
 import { generateLobbyId } from './utils';
-import { createLobby, getUserLobby, joinLobby } from 'wasp/client/operations'
+import { createLobby, getUserLobby, getUserLobbySession, joinLobby } from 'wasp/client/operations'
 import { AuthUser } from 'wasp/auth';
 import { Lobby } from 'wasp/entities';
 import avatarPlaceholder from '../client/static/avatar-placeholder.png';
 import { useHistory } from 'react-router-dom';
+import { useLobby } from './useLobby';
 
 export const LobbyPage = ({ user }: { user: AuthUser }) => {
     const history = useHistory();
     // The "socket" instance is typed with the types you defined on the server.
     const { socket, isConnected } = useSocket()
-
-    const [lobbyInfo, setLobbyInfo] = useState<Lobby>()
     const [isCopy, setIsCopy] = useState<boolean>(false)
-    const [lobbyMembers, setLobbyMembers] = useState<{ username: string; isReady: boolean; }[]>()
+    const [lobbyMembers, setLobbyMembers] = useState<{ username: string; isReady: boolean; isConnected: boolean; }[]>()
     // This is a type-safe event handler: "chatMessage" event and its payload type
     // are defined on the server.
     useSocketListener('lobbyOperation', updateLobbyInfo)
@@ -29,47 +27,7 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
         setLobbyMembers(serverLobbyInfo.clients);
     }
 
-
-    useEffect(() => {
-        let isCancelled = false;
-
-        const handleLobbyOperations = async () => {
-            try {
-                const lobby = await getUserLobby();
-                if (!isCancelled) {
-
-                    if (lobby) {
-                        if (!lobby.roomId) return
-                        console.log(lobby);
-
-
-                        socket.emit('lobbyOperation', { lobbyId: lobby.roomId, action: "join" });
-                        await joinLobby({ roomId: lobby.roomId });
-                        setLobbyInfo(lobby);
-                    } else {
-                        const newLobbyId = generateLobbyId(5);
-                        socket.emit('lobbyOperation', { lobbyId: newLobbyId, action: "join" });
-                        // TODO: move this to websocket.ts
-                        await createLobby({ roomId: newLobbyId });
-                        const newLobby = await getUserLobby();
-                        setLobbyInfo(newLobby);
-                    }
-                }
-            } catch (err: any) {
-                if (!isCancelled) {
-                    window.alert('Error: ' + (err.message || 'Something went wrong'));
-                }
-            }
-        };
-
-        if (isConnected) {
-            handleLobbyOperations();
-        }
-
-        return () => {
-            isCancelled = true;
-        };
-    }, [socket, isConnected]);
+    const { lobbyInfo, updateReadyState, leaveLobby } = useLobby(user, isConnected, socket);
 
     useEffect(() => {
         if (lobbyMembers?.length) {
@@ -79,19 +37,6 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
             }
         }
     }, [lobbyMembers])
-
-    const updateReadyState = () => {
-        if (!lobbyInfo?.roomId) return;
-        socket.emit('lobbyOperation', { lobbyId: lobbyInfo?.roomId, action: "ready" });
-    }
-
-    const leaveLobby = () => {
-        console.log("leaving");
-
-        if (!lobbyInfo?.roomId) return;
-        socket.emit('lobbyOperation', { lobbyId: lobbyInfo?.roomId, action: "leave" });
-        history.push("/")
-    }
 
     const connectionIcon = isConnected ? '🟢' : '🔴'
 
@@ -114,14 +59,16 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
                     </p>
                     <h2 className='text-lg font-bold'>Lobby ID: {lobbyInfo?.roomId}</h2>
                     <h3>Invite your friends:</h3>
-                    <p>
+                    {lobbyInfo ? <p>
                         {window.location.origin}/join/{lobbyInfo?.roomId}
                         <button className={`mt-2 p-2 bg-blue-200 ml-5 rounded ${isCopy ? "bg-green-600" : ""}`} onClick={copyInvite}>{isCopy ? "Copied" : "Copy"}</button>
-                    </p>
+                    </p> : ""}
 
                     <h2 className='text-4xl font-bold my-10'>Players:</h2>
                     <div className='max-w-lg grid gap-4'>
                         {lobbyMembers?.map(member => {
+                            const isReady = member.isReady;
+                            const isCurrentUser = member.username === user.username
                             return (
                                 <div className='flex items-center justify-between w-full' key={member.username}>
                                     <div>
@@ -129,14 +76,14 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
                                     </div>
                                     <div>
                                         <p>{member.username}</p>
-                                        <p>{member.isReady ? "ready" : "not ready"}</p>
+                                        {/* <p>{member.isReady ? "ready" : "not ready"}</p> */}
+                                        <p>{member.isConnected ? '🟢' : '🔴'}</p>
                                     </div>
+                                    {isCurrentUser ? <button onClick={updateReadyState} className={`mt-2 p-2 text-white rounded capitalize ${isReady ? "bg-green-500" : "bg-red-500"}`}>{isReady ? "ready" : "not ready"}</button> : <p>{isReady ? "ready" : "not ready"}</p>}
                                 </div>
                             )
                         })}
                     </div>
-
-                    <button onClick={updateReadyState} className='mt-2 p-2 bg-green-500 text-white rounded'>Ready</button>
                 </div>
             </div>
         </>

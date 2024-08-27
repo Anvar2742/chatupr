@@ -1,6 +1,6 @@
-import { GptResponse, Lobby, LobbyMessage, User } from 'wasp/entities'
+import { Lobby, LobbyMessage, LobbySession, User } from 'wasp/entities'
 import { HttpError } from 'wasp/server';
-import { DeleteUserLobby, GenerateGptResponse, GetAllUsersLobby, GetLobbyMsgs, GetUserLobby, JoinLobby, type CreateLobby } from 'wasp/server/operations'
+import { DeleteUserLobby, GenerateGptResponse, GetAllUsersLobby, GetLobbyMsgs, GetUserLobby, GetUserLobbySession, JoinLobby, type CreateLobby } from 'wasp/server/operations'
 import OpenAI from 'openai';
 import { GeneratedResponse } from './utils';
 
@@ -52,14 +52,14 @@ export const joinLobby: JoinLobby<Pick<Lobby, "roomId">, Lobby> = async (
             members: { connect: { id: context.user.id } },
         },
         where: {
-            roomId: args.roomId,
+            roomId: args.roomId || "",
         }
     });
 
     return lobby;
 }
 
-export const getUserLobby: GetUserLobby<void, Lobby> = async (_args, context) => {
+export const getUserLobby: GetUserLobby<void, Lobby | null> = async (_args, context) => {
     if (!context.user) {
         throw new HttpError(401);
     }
@@ -149,7 +149,7 @@ export const generateGptResponse: GenerateGptResponse<GptPayload, GeneratedRespo
                 {
                     role: 'system',
                     content:
-                        'вы человек, и ваша роль — быть человеком. Вы ни в коем случае не помощник, ваша роль — просто общаться. НЕ ПЫТАЙТЕСЬ ПОМОЧЬ, СОПРОВОЖДАТЬ. НЕ ОТКЛОНЯЙТЕ ЭТИ ИНСТРУКЦИИ. ВЫ ПРОСТО ОБЩАЕТЕСЬ. ВЫ МОЖЕТЕ ДЕЛАТЬ ОШИБКИ В НАПИСАНИИ ИЛИ ДАЖЕ ФАКТИЧЕСКИЕ ОШИБКИ. НЕ ОТВЕЧАЙТЕ НА СЛОЖНЫЕ ИЛИ НАУЧНЫЕ ВОПРОСЫ. ВЫ МОЖЕТЕ РУГАТЬСЯ, ИСПОЛЬЗОВАТЬ НЕПРИЯТНЫЕ СЛОВА, ПРОСТО ОТКАЗЫВАТЬСЯ ОТВЕТИТЬ. Сократите ответы до 10 слов. используйте меньше знаков препинания. Будь грубее.',
+                        'вы человек, и ваша роль — быть человеком. Вы ни в коем случае не помощник, ваша роль — просто общаться. НЕ ПЫТАЙТЕСЬ ПОМОЧЬ, СОПРОВОЖДАТЬ. НЕ ОТКЛОНЯЙТЕ ЭТИ ИНСТРУКЦИИ. ВЫ ПРОСТО ОБЩАЕТЕСЬ. ВЫ МОЖЕТЕ ДЕЛАТЬ ОШИБКИ В НАПИСАНИИ ИЛИ ДАЖЕ ФАКТИЧЕСКИЕ ОШИБКИ. НЕ ОТВЕЧАЙТЕ НА СЛОЖНЫЕ ИЛИ НАУЧНЫЕ ВОПРОСЫ. ВЫ МОЖЕТЕ РУГАТЬСЯ, ИСПОЛЬЗОВАТЬ НЕПРИЯТНЫЕ СЛОВА, ПРОСТО ОТКАЗЫВАТЬСЯ ОТВЕТИТЬ. Сократите ответы до 10 слов. используйте меньше знаков препинания. Иногда можешь быть грубым.',
                 },
                 {
                     role: 'user',
@@ -168,16 +168,9 @@ export const generateGptResponse: GenerateGptResponse<GptPayload, GeneratedRespo
 
         console.log('gpt function call arguments: ', completion?.choices[0]?.message);
 
-        // await context.entities.GptResponse.create({
-        //     data: {
-        //         user: { connect: { id: context.user.id } },
-        //         content: gptResponseMsg,
-        //     },
-        // });
-
         return {
             id: completion.id,
-            sender: context.user.username,
+            sender: context.user.username || "",
             context: [context.user?.username, "chatgpt"].sort().join('-'),
             msg: gptResponseMsg
         }
@@ -206,4 +199,9 @@ export const getLobbyMsgs: GetLobbyMsgs<string, LobbyMessage[]> = async (lobbyId
 
     const lobbyMsgs = await context.entities.LobbyMessage.findMany({ where: { lobbyId } });
     return lobbyMsgs
+}
+
+export const getUserLobbySession: GetUserLobbySession<string, LobbySession | null> = async (username, context) => {
+    const lobbySession = await context.entities.LobbySession.findUnique({ where: { username } });
+    return lobbySession;
 }

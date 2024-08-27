@@ -6,7 +6,7 @@ import { type WebSocketDefinition, type WaspSocketData } from 'wasp/server/webSo
 export const webSocketFn: WebSocketFn = (io, context) => {
     interface socketUser { socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>; }
 
-    let lobbies: Record<string, { storeObj: Record<string, socketUser>; connectedClients: { username: string; isReady: boolean; isDetective: boolean; isRobot: boolean; }[] }> = {}; // Object to store lobbies data
+    let lobbies: Record<string, { storeObj: Record<string, socketUser>; connectedClients: { username: string; isReady: boolean; isDetective: boolean; isRobot: boolean; isConnected: boolean; }[] }> = {}; // Object to store lobbies data
 
     io.on('connection', (socket) => {
         if (!socket.data.user) return;
@@ -34,8 +34,6 @@ export const webSocketFn: WebSocketFn = (io, context) => {
 
             if (options.action === "leave") {
                 if (clients?.size && clients.size > 0) {
-                    console.log("trying to leave");
-
                     const lobbyFromDb = await context.entities.Lobby.findUnique({
                         where: { roomId: lobbyId },
                         include: { members: true } // Ensure we include members to update them later
@@ -61,6 +59,8 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                             }
                         }
                     });
+                    await context.entities.LobbySession.delete({ where: { username } });
+
 
                     // Remove the player from the lobby's connected clients
                     const userIndex = lobby.connectedClients.findIndex(client => client.username === username);
@@ -74,12 +74,9 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     if (lobbyFromDb.creatorId === userId || lobby.connectedClients.length === 0) {
                         // Delete the lobby from the database
                         await context.entities.Lobby.delete({ where: { roomId: lobbyId } });
-
-                        const msgs = await context.entities.LobbyMessage.findFirst({ where: { lobbyId: lobbyId } })
-
-                        if (msgs) {
-                            await context.entities.LobbyMessage.deleteMany({ where: { lobbyId: lobbyId } });
-                        }
+                        
+                        await context.entities.LobbyMessage.deleteMany({ where: { lobbyId } });
+                        await context.entities.LobbySession.deleteMany({ where: { lobbyId } });
 
                         io.to(lobbyId).emit('lobbyOperation', {
                             lobbyId: lobbyId,
@@ -104,56 +101,86 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                 }
             }
 
+            if (options.action === "reconnect") {
+                await socket.join(lobbyId)
+                const userIndex = lobby.connectedClients.findIndex(client => client.username === username);
+                console.log("reconnect", userIndex);
+                if (userIndex === -1) return;
+
+                lobby.connectedClients[userIndex].isConnected = true;
+                io.to(lobbyId).emit('lobbyOperation', {
+                    lobbyId: lobbyId,
+                    lobbyStatus: "alive",
+                    clients: lobby.connectedClients
+                });
+
+            }
 
             if (options.action === "join") {
-                if (clients?.size && clients.size > 0) {
-                    await socket.join(lobbyId);
-                    lobby.storeObj[username] = { socket: socket };
+                const isLobbyExisting = clients?.size && clients.size > 0;
+                await socket.join(lobbyId);
+                lobby.storeObj[username] = { socket };
 
-                    // Use `find` to check if the user already exists
-                    const existingUser = lobby.connectedClients.find(client => client.username === username);
-
-                    if (!existingUser) {
-                        const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
-                        // const isDetective = lobbyFromDb?.detectiveId === username;
-                        lobby.connectedClients.push({ username, isReady: false, isDetective: false, isRobot: false });
-
-                        const oneDayInMilliseconds = 24 * 60 * 60 * 1000;
-                        const expiresAt = new Date(Date.now() + oneDayInMilliseconds);
-                        await context.entities.LobbySession.create({ data: { username: username, isReady: false, isDetective: false, isHost: true, lobbyId, expiresAt } })
-                    }
-
-                    // Remove duplicate entries for the same user
-                    lobby.connectedClients = removeDuplicateClients(lobby.connectedClients);
-
-                    io.to(lobbyId).emit('lobbyOperation', {
-                        lobbyId: lobbyId,
-                        lobbyStatus: "alive",
-                        clients: lobby.connectedClients
-                    });
-                } else {
-                    // Clear and reinitialize the lobby if it was previously empty
-                    lobby.connectedClients = [];
-                    await socket.join(lobbyId);
-                    lobby.storeObj[username] = { socket: socket };
-
-                    const lobbyFromDb = await context.entities.Lobby.findUnique({ where: { roomId: lobbyId } });
-                    // const isDetective = lobbyFromDb?.detectiveId === username;
-                    lobby.connectedClients.push({ username, isReady: false, isDetective, isRobot: false });
-
-                    const oneDayInMilliseconds = 24 * 60 * 60 * 1000;
-                    const expiresAt = new Date(Date.now() + oneDayInMilliseconds);
-                    await context.entities.LobbySession.create({ data: { username: username, isReady: false, isDetective: false, isHost: true, lobbyId, expiresAt } })
-
-                    console.info(`[CREATE] Client created and joined lobby ${lobbyId}`);
-
-                    io.to(lobbyId).emit('lobbyOperation', {
-                        lobbyId: lobbyId,
-                        lobbyStatus: "alive",
-                        clients: lobby.connectedClients
-                    });
+                // If lobby doesn't exist, clear and reinitialize it
+                if (!isLobbyExisting) {
+                    initializeNewLobby(username, lobbyId, lobby);
+                    return;
                 }
+
+                // Check if the user already exists in the database
+                const existingUser = await context.entities.LobbySession.findUnique({ where: { username } });
+                if (existingUser === null) {
+                    addUserToLobbyAndSession(username, lobbyId, lobby);
+                }
+
+                io.to(lobbyId).emit('lobbyOperation', {
+                    lobbyId,
+                    lobbyStatus: "alive",
+                    clients: lobby.connectedClients
+                });
             }
+
+            async function addUserToLobbyAndSession(username: string, lobbyId: string, lobby: any) {
+                console.log("add user to lobby");
+
+                lobby.connectedClients.push({
+                    username,
+                    isReady: false,
+                    isDetective: false,
+                    isRobot: false,
+                    isConnected: true
+                });
+
+                const oneDayInMilliseconds = 24 * 60 * 60 * 1000;
+                const expiresAt = new Date(Date.now() + oneDayInMilliseconds);
+
+                await context.entities.LobbySession.create({
+                    data: {
+                        username,
+                        isReady: false,
+                        isDetective: false,
+                        isHost: true,
+                        lobbyId,
+                        expiresAt
+                    }
+                });
+            }
+
+            function initializeNewLobby(username: string, lobbyId: string, lobby: any) {
+                console.log("creating lobby!!!!!!!!!!!!!!!!!!!!1");
+
+                lobby.connectedClients = [];
+                addUserToLobbyAndSession(username, lobbyId, lobby);
+
+                console.info(`[CREATE] Client created and joined lobby ${lobbyId}`);
+
+                io.to(lobbyId).emit('lobbyOperation', {
+                    lobbyId,
+                    lobbyStatus: "alive",
+                    clients: lobby.connectedClients
+                });
+            }
+
 
             socket.on('disconnect', () => {
                 // Handle user disconnect, removing them from the lobby if necessary
@@ -161,22 +188,14 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     const lobby = lobbies[lobbyId];
                     const userIndex = lobby.connectedClients.findIndex(client => client.username === username);
                     if (userIndex !== -1) {
-                        lobby.connectedClients.splice(userIndex, 1);
-                        delete lobby.storeObj[username];
-
-                        // Notify others in the lobby about the disconnection
+                        // just show that the user isn't in the lobby instead of removing 
+                        lobby.connectedClients[userIndex].isConnected = false;
+                        console.log("after disconnect", lobby.connectedClients);
                         io.to(lobbyId).emit('lobbyOperation', {
                             lobbyId: lobbyId,
-                            lobbyStatus: "updated",
+                            lobbyStatus: "alive",
                             clients: lobby.connectedClients
                         });
-
-                        // Optionally, clean up the lobby if no users are left
-                        if (lobby.connectedClients.length === 0) {
-                            delete lobbies[lobbyId];
-                        }
-                        console.log("after disconnect", lobby.connectedClients);
-
                         break;
                     }
                 }
@@ -203,6 +222,10 @@ export const webSocketFn: WebSocketFn = (io, context) => {
 
                     return client;
                 })
+
+                const currentUserLobbySession = await context.entities.LobbySession.findUnique({ where: { username } });
+                // Check if the user already exists in the database
+                await context.entities.LobbySession.update({ where: { username }, data: { isReady: !currentUserLobbySession?.isReady } });
 
                 if (clients?.size && clients?.size > 0) {
                     const readyClients = lobbies[lobbyId].connectedClients.filter(client => client.isReady)
@@ -305,6 +328,7 @@ interface ServerToClientEvents {
             isReady: boolean;
             isDetective: boolean;
             isRobot: boolean;
+            isConnected: boolean;
         }[]
     }) => void;
 }
