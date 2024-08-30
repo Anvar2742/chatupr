@@ -74,7 +74,7 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     if (lobbyFromDb.creatorId === userId || lobby.connectedClients.length === 0) {
                         // Delete the lobby from the database
                         await context.entities.Lobby.delete({ where: { roomId: lobbyId } });
-                        
+
                         await context.entities.LobbyMessage.deleteMany({ where: { lobbyId } });
                         await context.entities.LobbySession.deleteMany({ where: { lobbyId } });
 
@@ -104,10 +104,20 @@ export const webSocketFn: WebSocketFn = (io, context) => {
             if (options.action === "reconnect") {
                 await socket.join(lobbyId)
                 const userIndex = lobby.connectedClients.findIndex(client => client.username === username);
-                console.log("reconnect", userIndex);
-                if (userIndex === -1) return;
 
-                lobby.connectedClients[userIndex].isConnected = true;
+                if (userIndex === -1) {
+                    const lobbySess = await context.entities.LobbySession.findUnique({ where: { username } })
+                    if (lobbySess === null) return;
+                    lobby.connectedClients.push({
+                        username,
+                        isReady: lobbySess.isReady,
+                        isDetective: lobbySess.isDetective,
+                        isRobot: false,
+                        isConnected: true
+                    });
+                } else {
+                    lobby.connectedClients[userIndex].isConnected = true;
+                }
                 io.to(lobbyId).emit('lobbyOperation', {
                     lobbyId: lobbyId,
                     lobbyStatus: "alive",
@@ -130,7 +140,7 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                 // Check if the user already exists in the database
                 const existingUser = await context.entities.LobbySession.findUnique({ where: { username } });
                 if (existingUser === null) {
-                    addUserToLobbyAndSession(username, lobbyId, lobby);
+                    addUserToLobbyAndSession(username, lobbyId, lobby, false);
                 }
 
                 io.to(lobbyId).emit('lobbyOperation', {
@@ -140,7 +150,7 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                 });
             }
 
-            async function addUserToLobbyAndSession(username: string, lobbyId: string, lobby: any) {
+            async function addUserToLobbyAndSession(username: string, lobbyId: string, lobby: any, isHost: boolean) {
                 console.log("add user to lobby");
 
                 lobby.connectedClients.push({
@@ -159,7 +169,7 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                         username,
                         isReady: false,
                         isDetective: false,
-                        isHost: true,
+                        isHost,
                         lobbyId,
                         expiresAt
                     }
@@ -167,10 +177,8 @@ export const webSocketFn: WebSocketFn = (io, context) => {
             }
 
             function initializeNewLobby(username: string, lobbyId: string, lobby: any) {
-                console.log("creating lobby!!!!!!!!!!!!!!!!!!!!1");
-
                 lobby.connectedClients = [];
-                addUserToLobbyAndSession(username, lobbyId, lobby);
+                addUserToLobbyAndSession(username, lobbyId, lobby, true);
 
                 console.info(`[CREATE] Client created and joined lobby ${lobbyId}`);
 
@@ -245,6 +253,7 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                             return client;
                         })
 
+                        await context.entities.LobbySession.update({ where: { username: copUsername }, data: { isDetective: true } })
                         await context.entities.Lobby.update({
                             where: {
                                 roomId: options.lobbyId,

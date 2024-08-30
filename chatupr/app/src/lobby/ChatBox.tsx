@@ -10,6 +10,7 @@ import { Member } from "./utils";
 const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, index, propsLobbyInfo }: { user: AuthUser, member: Member, currentUserIsDetective: boolean, propsDetectiveUser: Member | undefined, index: number, propsLobbyInfo: Lobby }) => {
     const [messages, setMessages] = useState<ServerToClientPayload<'chatMessage'>[]>();
     const [inputValue, setInputValue] = useState("");
+    const [isRobot, setIsRobot] = useState(false);
     const chatContext = [user.username, member.username].sort().join('-')
     const [filteredMsgs, setFilteredMsgs] = useState<ServerToClientPayload<'chatMessage'>[]>();
     const { socket, isConnected } = useSocket();
@@ -18,7 +19,7 @@ const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, ind
     useEffect(() => {
         const handleGetLobbyMsgs = async () => {
             try {
-                const lobbyMsgs = await getLobbyMsgs(propsLobbyInfo.roomId || "");
+                const lobbyMsgs = await getLobbyMsgs(propsLobbyInfo?.roomId || "");
 
                 if (lobbyMsgs) {
                     setMessages(() => {
@@ -116,6 +117,10 @@ const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, ind
         })
     }, [messages])
 
+    const makeDesicion = (username: string, isRobot: boolean) => {
+        console.log(username, isRobot);
+    }
+
     if (!filteredMsgs) return
 
     return (
@@ -125,7 +130,16 @@ const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, ind
                 <img src={avatarPlaceholder} alt="" className='w-25 mb-2' />
                 <p><strong>{member.username}</strong> {member.isDetective ? "🕵️" : "🐇"}</p>
             </div> */}
-            <h3 className='font-bold text-4xl'>{index}</h3>
+            <div className="flex justify-between">
+                <h3 className='font-bold text-4xl'>{index}</h3>
+                {propsDetectiveUser?.username === user.username ? <div className="">
+                    <div className="flex items-center">
+                        <label htmlFor="isRobot" className="mr-2">Робот?</label>
+                        <input type="checkbox" name="isRobot" id="isRobot" checked={isRobot} onChange={() => setIsRobot(prevIsRobot => !prevIsRobot)} />
+                    </div>
+                    <button className="mt-2 p-2 text-white rounded bg-orange-500" onClick={() => makeDesicion(member.username, isRobot)}>Принять решение</button>
+                </div> : ""}
+            </div>
             <div className='border-black border-solid border p-5 shadow-2 shadow-slate-500 rounded-xl mt-10'>
                 <ul className=''>
                     {filteredMsgs?.map((msg, index) => (
@@ -137,16 +151,18 @@ const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, ind
                                     ? "text-right" // Detective's message and it isn't addressed to the current user
                                     : "" // Everyone else's message
                             }`}>
-                            {/* <em>{msg.username}</em>: */}
-                            <span className={`
+                            <div className={`flex flex-col ${propsDetectiveUser?.username === msg.fromUser ? "items-end" : "items-start"}`}>
+                                <em>{propsDetectiveUser?.username === msg.fromUser ? "Detective" : "Rabbit"}</em>
+                                <span className={`
                                 py-1 px-4 rounded
                                 ${msg.fromUser === user.username
-                                    ? "bg-orange-300" // Current user sending a message
-                                    : msg.fromUser === propsDetectiveUser?.username && msg.toUser != user.username
-                                        ? "bg-orange-300" // Detective's message and it isn't addressed to the current user
-                                        : "bg-blue-300" // Everyone else's message
-                                }`}
-                            >{msg.content}</span>
+                                        ? "bg-orange-300" // Current user sending a message
+                                        : msg.fromUser === propsDetectiveUser?.username && msg.toUser != user.username
+                                            ? "bg-orange-300" // Detective's message and it isn't addressed to the current user
+                                            : "bg-blue-300" // Everyone else's message
+                                    }`}
+                                >{msg.content}</span>
+                            </div>
                         </li>
                     ))}
                 </ul>

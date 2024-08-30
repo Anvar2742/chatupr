@@ -6,13 +6,15 @@ import { Lobby } from 'wasp/entities';
 import { useHistory } from 'react-router-dom';
 import { Member, shuffle } from './utils';
 import ChatBox from './ChatBox';
+import { useLobby } from './useLobby';
 
 export const GamePage = ({ user }: { user: AuthUser }) => {
     const { socket, isConnected } = useSocket();
     const [lobbyMembers, setLobbyMembers] = useState<Member[]>([]);
     const [detectiveUser, setDetectiveUser] = useState<Member>();
-    const [lobbyInfo, setLobbyInfo] = useState<Lobby>()
+    // const [lobbyInfo, setLobbyInfo] = useState<Lobby>()
     const history = useHistory();
+    const { lobbyInfo, leaveLobby } = useLobby(user, isConnected, socket);
 
     // Listen for lobby updates
     useSocketListener('lobbyOperation', useCallback((serverLobbyInfo: ServerToClientPayload<'lobbyOperation'>) => {
@@ -27,37 +29,6 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
             return shuffle([...serverLobbyInfo.clients, { username: "chatgpt", isDetective: false, isReady: true, isRobot: true }])
         });
     }, []));
-
-    // Fetch initial lobby state
-    useEffect(() => {
-        const handleGetUserLobby = async () => {
-            try {
-                const lobby = await getUserLobby();
-                if (lobby?.roomId) {
-                    socket.emit('lobbyOperation', { lobbyId: lobby.roomId, action: 'join' });
-                    setLobbyInfo(lobby);
-                } else {
-                    history.push("/")
-                }
-            } catch (err: any) {
-                window.alert('Error: ' + (err.message || 'Something went wrong'));
-            }
-        };
-
-        if (isConnected) {
-            handleGetUserLobby();
-        }
-    }, [socket, isConnected]);
-
-
-
-    const leaveLobby = () => {
-        if (!lobbyInfo?.roomId) return;
-
-        socket.emit('lobbyOperation', { lobbyId: lobbyInfo?.roomId, action: "leave" });
-        localStorage.removeItem("chatMessages");
-        history.push("/")
-    }
 
     const connectionIcon = isConnected ? '🟢' : '🔴'
 

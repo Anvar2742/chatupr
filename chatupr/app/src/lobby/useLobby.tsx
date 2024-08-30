@@ -16,13 +16,13 @@ export function useLobby(user: AuthUser, isConnected: boolean, socket: any) {
         let isCancelled = false;
 
         const handleLobbyOperations = async () => {
+            console.log("cool");
             if (!isConnected || isCancelled) return;
 
             try {
                 const lobbySession = await getUserLobbySession(user.username || "");
                 const lobby = await getUserLobby();
 
-                console.log("cool");
                 if (lobbySession?.username) {
                     if (!lobby?.roomId) return;
                     socket.emit('lobbyOperation', { lobbyId: lobby.roomId, action: "reconnect" });
@@ -49,7 +49,7 @@ export function useLobby(user: AuthUser, isConnected: boolean, socket: any) {
             }
         };
 
-        if (location.pathname === '/lobby' && !hasRun.current) {
+        if ((location.pathname === '/lobby' || location.pathname === '/chat') && !hasRun.current) {
             handleLobbyOperations();
             hasRun.current = true;
         }
