@@ -39,4 +39,6 @@ export type Member = {
     isReady: boolean;
     isDetective: boolean;
     isRobot: boolean;
+    canPlay: boolean;
+    isHost: boolean;
 }

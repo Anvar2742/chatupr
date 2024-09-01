@@ -81,6 +81,7 @@ model LobbySession {
   isDetective               Boolean
   isHost                    Boolean
   lobbyId                   String
+  canPlay                   Boolean
   // canTalk (no need for this one 'cause I can detect that by last message)                  
 }
 

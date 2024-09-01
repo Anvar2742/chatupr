@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { useMemo } from "react";
 import { AuthUser } from "wasp/auth";
 import { generateGptResponse, getLobbyMsgs } from "wasp/client/operations";
 import { ServerToClientPayload, useSocket } from "wasp/client/webSocket";
@@ -7,10 +6,9 @@ import { Lobby } from "wasp/entities";
 import { Member } from "./utils";
 
 // ChatBox component
-const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, index, propsLobbyInfo }: { user: AuthUser, member: Member, currentUserIsDetective: boolean, propsDetectiveUser: Member | undefined, index: number, propsLobbyInfo: Lobby }) => {
+const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, index, propsLobbyInfo, isVoting, canCurrentPlay }: { user: AuthUser, member: Member, currentUserIsDetective: boolean, propsDetectiveUser: Member | undefined, index: number, propsLobbyInfo: Lobby | null | undefined, isVoting: boolean, canCurrentPlay: boolean }) => {
     const [messages, setMessages] = useState<ServerToClientPayload<'chatMessage'>[]>();
     const [inputValue, setInputValue] = useState("");
-    const [isRobot, setIsRobot] = useState(false);
     const chatContext = [user.username, member.username].sort().join('-')
     const [filteredMsgs, setFilteredMsgs] = useState<ServerToClientPayload<'chatMessage'>[]>();
     const { socket, isConnected } = useSocket();
@@ -117,8 +115,10 @@ const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, ind
         })
     }, [messages])
 
-    const makeDesicion = (username: string, isRobot: boolean) => {
-        console.log(username, isRobot);
+
+    const makeDesicion = (username: string) => {
+        const lobbyId = propsLobbyInfo?.roomId || ""
+        socket.emit("desicion", { username, lobbyId })
     }
 
     if (!filteredMsgs) return
@@ -132,12 +132,8 @@ const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, ind
             </div> */}
             <div className="flex justify-between">
                 <h3 className='font-bold text-4xl'>{index}</h3>
-                {propsDetectiveUser?.username === user.username ? <div className="">
-                    <div className="flex items-center">
-                        <label htmlFor="isRobot" className="mr-2">Робот?</label>
-                        <input type="checkbox" name="isRobot" id="isRobot" checked={isRobot} onChange={() => setIsRobot(prevIsRobot => !prevIsRobot)} />
-                    </div>
-                    <button className="mt-2 p-2 text-white rounded bg-orange-500" onClick={() => makeDesicion(member.username, isRobot)}>Принять решение</button>
+                {propsDetectiveUser?.username === user.username && isVoting ? <div className="">
+                    <button className="mt-2 p-2 text-white rounded bg-orange-500" onClick={() => makeDesicion(member.username)}>Это человек!</button>
                 </div> : ""}
             </div>
             <div className='border-black border-solid border p-5 shadow-2 shadow-slate-500 rounded-xl mt-10'>
@@ -166,7 +162,7 @@ const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, ind
                         </li>
                     ))}
                 </ul>
-                {(currentUserIsDetective || member.isDetective) && !(user.username === member.username) ? (
+                {(currentUserIsDetective || member.isDetective) && !(user.username === member.username) && member.canPlay && canCurrentPlay ? (
                     <form onSubmit={(e) => handleSubmit(e, member.isRobot, filteredMsgs.length ? filteredMsgs[filteredMsgs.length - 1].fromUser === user.username ? false : true : user.username === propsDetectiveUser?.username ? true : false)}>
                         <input
                             type="text"
@@ -179,7 +175,7 @@ const ChatBox = ({ user, member, currentUserIsDetective, propsDetectiveUser, ind
                             {filteredMsgs.length ? filteredMsgs[filteredMsgs.length - 1].fromUser === user.username ? "Не твоя очередь" : "Отправить" : user.username === propsDetectiveUser?.username ? "Отправить" : "Не твоя очередь"}
                         </button>
                     </form>
-                ) : null}
+                ) : ""}
             </div>
         </div>
     );
