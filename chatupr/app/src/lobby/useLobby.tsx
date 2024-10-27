@@ -14,10 +14,10 @@ export function useLobby(user: AuthUser, isConnected: boolean, socket: any) {
     useEffect(() => {
         if (hasRun.current) return;
         let isCancelled = false;
+        socket.connect()
 
         const handleLobbyOperations = async () => {
-            console.log("cool");
-            if (!isConnected || isCancelled) return;
+            if (isCancelled) return;
 
             try {
                 const lobbySession = await getUserLobbySession(user.username || "");
@@ -29,7 +29,6 @@ export function useLobby(user: AuthUser, isConnected: boolean, socket: any) {
                     setLobbyInfo(lobby);
                     return;
                 }
-                console.log("cool 2");
 
                 if (lobby) {
                     if (!lobby?.roomId) return;

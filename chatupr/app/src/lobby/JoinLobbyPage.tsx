@@ -13,6 +13,7 @@ export const JoinLobbyPage = (props: RouteComponentProps<{ joinCode: string }>) 
     const { socket, isConnected } = useSocket()
 
     useEffect(() => {
+        socket.connect()
         let isCancelled = false;
 
         const handleGetUserLobby = async () => {

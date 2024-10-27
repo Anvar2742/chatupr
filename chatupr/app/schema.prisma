@@ -31,7 +31,8 @@ model User {
 
   createdLobby              Lobby?          @relation("CreatedLobby")
   joinedLobby               Lobby?          @relation("JoinedLobbies", fields: [lobbyId], references: [id])
-  lobbyId                   String?      // Foreign key to the Lobby model        
+  lobbyId                   String?      // Foreign key to the Lobby model       
+  gptConfig                 String?
 }
 
 model Lobby {

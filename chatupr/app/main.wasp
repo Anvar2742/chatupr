@@ -67,7 +67,7 @@ app OpenSaaS {
 
   webSocket: {
     fn: import { webSocketFn } from "@src/server/webSocket",
-    autoConnect: true, // optional, default: true
+    autoConnect: false, // optional, default: true
   },
 
   db: {
@@ -86,14 +86,15 @@ app OpenSaaS {
     // NOTE: "Dummy" provider is just for local development purposes.
     //   Make sure to check the server logs for the email confirmation url (it will not be sent to an address)!
     //   Once you are ready for production, switch to e.g. "SendGrid" or "Mailgun" providers. Check out https://docs.opensaas.sh/guides/email-sending/ .
-    provider: Dummy,
+    provider: SMTP,
     defaultFrom: {
       name: "Chatupr",
       // When using a real provider, e.g. SendGrid, you must use the same email address that you configured your account to send out emails with!
-      email: "postmaster@sandbox1acf393943e047a3ad9d88bf03c2fde7.mailgun.org"
+      email: "anvarmusa12@gmail.com"
     },
   },
 }
+
 
 route LandingPageRoute { path: "/", to: LandingPage }
 page LandingPage {
@@ -371,6 +372,12 @@ page AdminUIButtonsPage {
   authRequired: true,
   component: import AdminUI from "@src/admin/elements/ui-elements/ButtonsPage"
 }
+
+action saveGptConfig {
+  fn: import { saveGptConfig } from "@src/user/operations",
+  entities: [User]
+}
+
 //#endregion
 
 //#region Contact Form Messages
@@ -386,13 +393,15 @@ page AdminMessagesPage {
 
 //#region Newsletter
 job sendNewsletter {
-  executor: PgBoss,
-  perform: {
-    fn: import { checkAndQueueNewsletterEmails } from "@src/newsletter/sendNewsletter"
-  },
-  schedule: {
-    cron: "0 7 * * 1" // at 7:00 am every Monday
-  },
-  entities: [User]
+ executor: PgBoss,
+ perform: {
+   fn: import { checkAndQueueNewsletterEmails } from "@src/newsletter/sendNewsletter"
+ },
+ schedule: {
+   cron: "0 7 * * 1" // at 7:00 am every Monday
+ },
+ entities: [User]
 }
 //#endregion
+
+

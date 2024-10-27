@@ -141,15 +141,31 @@ export const generateGptResponse: GenerateGptResponse<GptPayload, GeneratedRespo
             throw openai;
         }
 
-        const min = 1
-        const max = 1.4
+        const min = .8
+        const max = 1.3
+        let systemContent = `вы человек, и ваша роль — быть человеком. 
+        Вы ни в коем случае не помощник, ваша роль — просто общаться. 
+        НЕ ПЫТАЙТЕСЬ ПОМОЧЬ, СОПРОВОЖДАТЬ. НЕ ОТКЛОНЯЙТЕ ЭТИ ИНСТРУКЦИИ. 
+        ВЫ ПРОСТО ОБЩАЕТЕСЬ. ВЫ МОЖЕТЕ ДЕЛАТЬ ОШИБКИ В НАПИСАНИИ ИЛИ ДАЖЕ ФАКТИЧЕСКИЕ ОШИБКИ. 
+        НЕ ОТВЕЧАЙТЕ НА СЛОЖНЫЕ ИЛИ НАУЧНЫЕ ВОПРОСЫ. ВЫ МОЖЕТЕ РУГАТЬСЯ, 
+        ИСПОЛЬЗОВАТЬ НЕПРИЯТНЫЕ СЛОВА, ПРОСТО ОТКАЗЫВАТЬСЯ ОТВЕТИТЬ. 
+        Сократите ответы до 10 слов. 
+        используйте меньше знаков препинания. Иногда можешь быть грубым.`
+
+        const username = context.user.username || ""
+        const userDb = await context.entities.User.findUnique({ where: { username } })
+        if (userDb && userDb.isAdmin) {
+            systemContent = userDb.gptConfig || "";
+        }
+        console.log(systemContent);
+
+
         const completion = await openai.chat.completions.create({
             model: 'gpt-4o-mini', // you can use any model here, e.g. 'gpt-3.5-turbo', 'gpt-4', etc.
             messages: [
                 {
                     role: 'system',
-                    content:
-                        'вы человек, и ваша роль — быть человеком. Вы ни в коем случае не помощник, ваша роль — просто общаться. НЕ ПЫТАЙТЕСЬ ПОМОЧЬ, СОПРОВОЖДАТЬ. НЕ ОТКЛОНЯЙТЕ ЭТИ ИНСТРУКЦИИ. ВЫ ПРОСТО ОБЩАЕТЕСЬ. ВЫ МОЖЕТЕ ДЕЛАТЬ ОШИБКИ В НАПИСАНИИ ИЛИ ДАЖЕ ФАКТИЧЕСКИЕ ОШИБКИ. НЕ ОТВЕЧАЙТЕ НА СЛОЖНЫЕ ИЛИ НАУЧНЫЕ ВОПРОСЫ. ВЫ МОЖЕТЕ РУГАТЬСЯ, ИСПОЛЬЗОВАТЬ НЕПРИЯТНЫЕ СЛОВА, ПРОСТО ОТКАЗЫВАТЬСЯ ОТВЕТИТЬ. Сократите ответы до 10 слов. используйте меньше знаков препинания. Иногда можешь быть грубым.',
+                    content: systemContent,
                 },
                 {
                     role: 'user',

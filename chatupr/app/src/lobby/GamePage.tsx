@@ -24,7 +24,7 @@ export const GamePage = ({ user }: { user: AuthUser }) => {
             history.push("/")
         }
         const membsCanPlay = serverLobbyInfo.clients.filter(el => el.canPlay)
-        if (membsCanPlay.length === 1) {
+        if (membsCanPlay.length === 1 && lobbyMembers.length > 0) {
             setIsGameOver(true);
             setWinnerUser(membsCanPlay[0])
         }

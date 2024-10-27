@@ -8,6 +8,7 @@ export const webSocketFn: WebSocketFn = (io, context) => {
 
     let lobbies: Record<string, { storeObj: Record<string, socketUser>; connectedClients: { username: string; isReady: boolean; isDetective: boolean; isRobot: boolean; isConnected: boolean; canPlay: boolean; isHost: boolean; }[] }> = {}; // Object to store lobbies data
 
+
     io.on('connection', (socket) => {
         if (!socket.data.user) return;
 
@@ -141,7 +142,7 @@ export const webSocketFn: WebSocketFn = (io, context) => {
                     }
                 })
                 console.log(updatedLobby);
-                
+
                 io.emit("restart", { clients: lobby.connectedClients, lobbyStatus: "game" })
             } catch (error) {
                 console.error("Error handling restart event:", error);

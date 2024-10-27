@@ -2,6 +2,7 @@ import {
   type UpdateCurrentUser,
   type UpdateUserById,
   type GetPaginatedUsers,
+  SaveGptConfig,
 } from 'wasp/server/operations';
 import { type User } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
@@ -66,7 +67,7 @@ export const getPaginatedUsers: GetPaginatedUsers<GetPaginatedUsersInput, GetPag
   }
 
   const allSubscriptionStatusOptions = args.subscriptionStatus as Array<string | null> | undefined;
-  const hasNotSubscribed = allSubscriptionStatusOptions?.find((status) => status === null) 
+  const hasNotSubscribed = allSubscriptionStatusOptions?.find((status) => status === null)
   let subscriptionStatusStrings = allSubscriptionStatusOptions?.filter((status) => status !== null) as string[] | undefined
 
   const queryResults = await context.entities.User.findMany({
@@ -145,3 +146,13 @@ export const getPaginatedUsers: GetPaginatedUsers<GetPaginatedUsersInput, GetPag
     totalPages,
   };
 };
+
+export const saveGptConfig: SaveGptConfig<string, void> = async (gptConfig, context) => {
+  if (!context.user?.isAdmin) {
+    throw new HttpError(401);
+  }
+
+  console.log(gptConfig);
+  
+  await context.entities.User.update({ where: { username: context.user.username || undefined }, data: { gptConfig: gptConfig } })
+}

@@ -22,12 +22,16 @@ export const LobbyPage = ({ user }: { user: AuthUser }) => {
     // are defined on the server.
     useSocketListener('lobbyOperation', updateLobbyInfo)
 
+
     function updateLobbyInfo(serverLobbyInfo: ServerToClientPayload<'lobbyOperation'>) {
+        console.log(serverLobbyInfo);
+
         if (serverLobbyInfo.lobbyStatus === "dead") history.push("/")
         setLobbyMembers(serverLobbyInfo.clients);
     }
 
     const { lobbyInfo, updateReadyState, leaveLobby } = useLobby(user, isConnected, socket);
+
 
     useEffect(() => {
         if (lobbyMembers?.length) {
